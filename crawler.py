@@ -6,15 +6,17 @@ import re
 import json
 import time
 import sqlite3
-import contextlib
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urljoin
 
+from html import escape as html_escape
+
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-import json, os, time
 from pathlib import Path
 
 # Availability fallbacks (external helper you already have)
@@ -138,7 +140,7 @@ PRAGMA journal_mode=WAL;
 
 CREATE TABLE IF NOT EXISTS products (
   product_id INTEGER PRIMARY KEY,
-  handle TEXT NOT NULL UNIQUE,
+  handle TEXT NOT NULL,
   title TEXT,
   vendor TEXT,
   product_type TEXT,
@@ -278,20 +280,31 @@ def handle_from_product_url(url):
         return None
     return path.split("/products/", 1)[1].strip("/")
 
+def _requests_session_with_retries(retries=3, backoff_factor=0.5, status_forcelist=(500, 502, 503, 504)):
+    session = requests.Session()
+    retry = Retry(total=retries, backoff_factor=backoff_factor, status_forcelist=status_forcelist)
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+_retry_session = _requests_session_with_retries()
+
 def fetch_product_json(handle):
     url = f"{SITE_ROOT}/products/{handle}.json"
-    r = requests.get(url, headers=HEADERS, timeout=30)
+    r = _retry_session.get(url, headers=HEADERS, timeout=30)
     r.raise_for_status()
     return r.json()["product"]
 
 def cents(value):
+    if value is None:
+        return None
     try:
-        if value is None: return None
         return int(value)
-    except:
+    except (ValueError, TypeError):
         try:
             return int(round(float(value) * 100))
-        except:
+        except (ValueError, TypeError):
             return None
 
 # ---------------------- Email ----------------------
@@ -343,12 +356,12 @@ def build_email_fixed(is_initial, diffs, new_products, removed_products, initial
             if new_products:
                 parts.append("<h3>New products</h3><ul>")
                 for p in new_products:
-                    parts.append(f"<li><a href='{p['url']}'>{p['title']}</a> — {p.get('vendor') or ''} ({p['handle']})</li>")
+                    parts.append(f"<li><a href='{html_escape(p['url'])}'>{html_escape(p['title'])}</a> — {html_escape(p.get('vendor') or '')} ({html_escape(p['handle'])})</li>")
                 parts.append("</ul>")
             if removed_products:
                 parts.append("<h3>Removed products</h3><ul>")
                 for p in removed_products:
-                    parts.append(f"<li>{p['title']} ({p['handle']})</li>")
+                    parts.append(f"<li>{html_escape(p['title'])} ({html_escape(p['handle'])})</li>")
                 parts.append("</ul>")
 
     parts.append("<h3>Full catalog</h3>" if is_initial else "<h3>Variant changes</h3>")
@@ -366,16 +379,16 @@ def build_email_fixed(is_initial, diffs, new_products, removed_products, initial
 
     if not is_initial:
         for row in diffs:
-            link = row.get("variant_url") or row["url"]
+            link = html_escape(row.get("variant_url") or row["url"])
             parts.append(f"""
               <tr>
-                <td><a href="{link}">{row['product_title']}</a></td>
-                <td>{row['variant_title']}</td>
-                <td>{row['sku'] or ''}</td>
+                <td><a href="{link}">{html_escape(row['product_title'])}</a></td>
+                <td>{html_escape(row['variant_title'] or '')}</td>
+                <td>{html_escape(row['sku'] or '')}</td>
                 <td>{'Yes' if row['new_available'] else 'No'}</td>
                 <td>{render_money(row['new_price'])}</td>
                 <td>{render_money(row['new_compare_at'])}</td>
-                <td>{row['change_desc']}</td>
+                <td>{html_escape(row['change_desc'])}</td>
               </tr>
             """)
 
@@ -490,21 +503,22 @@ def main():
 
     log(f"Processing {len(handle_to_url)} products...")
 
+    # Use a single DB connection for the entire run
+    conn = db()
+
     # --- Anomaly guard: if suddenly far fewer products than last good run, skip safely
-    with db() as _conn_guard:
-        prev_count = last_product_count(_conn_guard)
+    prev_count = last_product_count(conn)
     current_count = len(handle_to_url)
     if prev_count and prev_count >= 100 and current_count < max(20, int(prev_count * 0.5)):
         log(f"Anomaly: only {current_count} products vs last {prev_count}. Skipping this run to avoid false removals.")
-        with db() as _conn_stats:
-            _conn_stats.execute("INSERT OR REPLACE INTO crawl_stats (run_at, product_count) VALUES (?,?)", (now_utc_iso(), current_count))
-            _conn_stats.commit()
-        with db() as _conn_out:
-            export_current_inventory_json(
-                _conn_out,
-                out_path=os.getenv("JSON_OUT_PATH", "/opt/rivian-gearshop-crawler/gearshop.json"),
-                site_root=SITE_ROOT
-            )
+        conn.execute("INSERT OR REPLACE INTO crawl_stats (run_at, product_count) VALUES (?,?)", (now_utc_iso(), current_count))
+        conn.commit()
+        export_current_inventory_json(
+            conn,
+            out_path=os.getenv("JSON_OUT_PATH", "/opt/rivian-gearshop-crawler/gearshop.json"),
+            site_root=SITE_ROOT
+        )
+        conn.close()
         return
 
     seen_product_ids = set()
@@ -512,17 +526,16 @@ def main():
     initial_rows_for_email = []
     new_products_report_block = []
     removed_products_report_block = []
-    is_initial = False  # set inside DB block
 
-    with db() as conn, contextlib.closing(conn.cursor()) as cur:
+    try:
         conn.execute("BEGIN")
         is_initial = not has_any_snapshot(conn)
+        cur = conn.cursor()
 
         # Crawl products
         for handle, url in handle_to_url.items():
             log(f"Product: {handle} → JSON")
-            with contextlib.suppress(Exception):
-                time.sleep(PRODUCT_DELAY)
+            time.sleep(PRODUCT_DELAY)
             try:
                 pj = fetch_product_json(handle)
             except Exception as e:
@@ -613,9 +626,9 @@ def main():
                 if is_initial:
                     initial_rows_for_email.append(f"""
                       <tr>
-                        <td><a href="{variant_url}">{title}</a></td>
-                        <td>{vtitle}</td>
-                        <td>{sku or ''}</td>
+                        <td><a href="{html_escape(variant_url)}">{html_escape(title or '')}</a></td>
+                        <td>{html_escape(vtitle or '')}</td>
+                        <td>{html_escape(sku or '')}</td>
                         <td>{'Yes' if available else 'No'}</td>
                         <td>{render_money(price)}</td>
                         <td>{render_money(compare_at)}</td>
@@ -733,6 +746,30 @@ def main():
 
         removed_products_report_block = confirmed_removed
 
+        # --- Prune old snapshots: keep only the latest 30 per variant ---
+        conn.execute("""
+            DELETE FROM snapshots
+            WHERE snapshot_id NOT IN (
+                SELECT snapshot_id FROM (
+                    SELECT snapshot_id,
+                           ROW_NUMBER() OVER (PARTITION BY variant_id ORDER BY snapshot_id DESC) AS rn
+                    FROM snapshots
+                ) sub
+                WHERE sub.rn <= 30
+            )
+        """)
+        pruned = conn.execute("SELECT changes()").fetchone()[0]
+        if pruned:
+            log(f"Pruned {pruned} old snapshot rows.")
+
+        conn.commit()
+        cur.close()
+
+    except Exception:
+        conn.rollback()
+        conn.close()
+        raise
+
     # Summary log
     log(
         f"Diffs: {len(diffs)} | New: {len(new_products_report_block)} | "
@@ -756,46 +793,44 @@ def main():
 
         # Remember newly reported removals to avoid re-emailing every run
         if removed_products_report_block:
-            with db() as conn_rm:
-                conn_rm.executemany(
-                    "INSERT OR IGNORE INTO removed_once (product_id, first_reported_at) VALUES (?, ?)",
-                    [(r["product_id"], crawled_at) for r in removed_products_report_block]
-                )
-                conn_rm.commit()
+            conn.executemany(
+                "INSERT OR IGNORE INTO removed_once (product_id, first_reported_at) VALUES (?, ?)",
+                [(r["product_id"], crawled_at) for r in removed_products_report_block]
+            )
+            conn.commit()
     else:
-        with db() as conn_hb:
-            if should_send_heartbeat(conn_hb):
-                ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-                html = f"""
-                    <h2>Rivian Gear Shop: Daily Heartbeat</h2>
-                    <p>No catalog changes detected in the last checks.</p>
-                    <ul>
-                      <li><b>Run time:</b> {ts}</li>
-                      <li><b>Products seen this run:</b> {len(handle_to_url)}</li>
-                      <li><b>HTML availability checks:</b> {get_avail_html_checks()}</li>
-                    </ul>
-                    <p style='color:#666'>Heartbeat is sent once per day at hour {HEARTBEAT_UTC_HOUR:02d}:00 UTC when there are no changes.</p>
-                """
-                send_email("Rivian Gear Shop: Daily Heartbeat (No Changes)", html)
-                mark_heartbeat_sent(conn_hb)
-            else:
-                log("No changes detected — not sending email (heartbeat either already sent today or outside heartbeat hour).")
+        if should_send_heartbeat(conn):
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            html = f"""
+                <h2>Rivian Gear Shop: Daily Heartbeat</h2>
+                <p>No catalog changes detected in the last checks.</p>
+                <ul>
+                  <li><b>Run time:</b> {ts}</li>
+                  <li><b>Products seen this run:</b> {len(handle_to_url)}</li>
+                  <li><b>HTML availability checks:</b> {get_avail_html_checks()}</li>
+                </ul>
+                <p style='color:#666'>Heartbeat is sent once per day at hour {HEARTBEAT_UTC_HOUR:02d}:00 UTC when there are no changes.</p>
+            """
+            send_email("Rivian Gear Shop: Daily Heartbeat (No Changes)", html)
+            mark_heartbeat_sent(conn)
+        else:
+            log("No changes detected — not sending email (heartbeat either already sent today or outside heartbeat hour).")
 
     # Record product-count for this successful run (used by anomaly guard)
-    with db() as _conn_stats:
-        _conn_stats.execute(
-            "INSERT OR REPLACE INTO crawl_stats (run_at, product_count) VALUES (?, ?)",
-            (crawled_at, len(handle_to_url))
-        )
-        _conn_stats.commit()
+    conn.execute(
+        "INSERT OR REPLACE INTO crawl_stats (run_at, product_count) VALUES (?, ?)",
+        (crawled_at, len(handle_to_url))
+    )
+    conn.commit()
 
     # Export current inventory to JSON for frontend consumption
-    with db() as _conn_out:
-        export_current_inventory_json(
-            _conn_out,
-            out_path=os.getenv("JSON_OUT_PATH", "/opt/rivian-gearshop-crawler/gearshop.json"),
-            site_root=SITE_ROOT
-        )
+    export_current_inventory_json(
+        conn,
+        out_path=os.getenv("JSON_OUT_PATH", "/opt/rivian-gearshop-crawler/gearshop.json"),
+        site_root=SITE_ROOT
+    )
+
+    conn.close()
 
 if __name__ == "__main__":
     main()
