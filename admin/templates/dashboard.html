@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2>Dashboard</h2>
+
+<div class="grid">
+{% for script in scripts %}
+  <article>
+    <header>
+      <hgroup>
+        <h3>{{ script.display_name }}</h3>
+        <p>{{ script.description or '' }}</p>
+      </hgroup>
+    </header>
+
+    <table>
+      <tr>
+        <td><strong>Status</strong></td>
+        <td>
+          {% if script.status.active_state == 'active' %}
+            <mark>Running</mark>
+          {% elif script.status.active_state == 'inactive' %}
+            <span>Inactive</span>
+          {% elif script.status.active_state == 'failed' %}
+            <mark class="error">Failed</mark>
+          {% else %}
+            <span>{{ script.status.active_state }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Last Run</strong></td>
+        <td>{{ script.status.last_trigger or 'Never' }}</td>
+      </tr>
+      <tr>
+        <td><strong>Next Run</strong></td>
+        <td>{{ script.status.next_trigger or 'N/A' }}</td>
+      </tr>
+      <tr>
+        <td><strong>Timer</strong></td>
+        <td>{{ 'Active' if script.timer_active else 'Stopped' }}</td>
+      </tr>
+    </table>
+
+    <footer>
+      <div role="group">
+        <a href="/scripts/{{ script.id }}" role="button" class="outline">Details</a>
+        <a href="/scripts/{{ script.id }}/config" role="button" class="outline secondary">Config</a>
+        <a href="/data/{{ script.id }}/products" role="button" class="outline secondary">Data</a>
+      </div>
+    </footer>
+  </article>
+{% endfor %}
+</div>
+{% endblock %}

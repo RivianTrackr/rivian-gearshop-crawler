@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ product.title }} — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>{{ product.title or product.handle }}</h2>
+  <p>
+    <code>{{ product.handle }}</code>
+    {% if product.vendor %} | {{ product.vendor }}{% endif %}
+    {% if product.product_type %} | {{ product.product_type }}{% endif %}
+  </p>
+</hgroup>
+
+{% if product.url %}
+<p><a href="{{ product.url }}" target="_blank" rel="noopener">View on store</a></p>
+{% endif %}
+
+<table>
+  <tr><td><strong>Product ID</strong></td><td>{{ product.product_id }}</td></tr>
+  <tr><td><strong>Created</strong></td><td>{{ product.created_at or '—' }}</td></tr>
+  <tr><td><strong>Updated</strong></td><td>{{ product.updated_at or '—' }}</td></tr>
+</table>
+
+<h3>Variants</h3>
+<div style="overflow-x: auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Variant</th>
+        <th>SKU</th>
+        <th>Price</th>
+        <th>Compare At</th>
+        <th>Available</th>
+        <th>Last Seen</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in variants %}
+      <tr>
+        <td>{{ v.title or 'Default' }}</td>
+        <td><code>{{ v.sku or '—' }}</code></td>
+        <td>
+          {% if v.price_cents is not none %}
+            ${{ "%.2f"|format(v.price_cents / 100) }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if v.compare_at_cents is not none %}
+            ${{ "%.2f"|format(v.compare_at_cents / 100) }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if v.available == 1 %}
+            <mark>In Stock</mark>
+          {% elif v.available == 0 %}
+            Sold Out
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>{{ v.crawled_at or '—' }}</td>
+        <td><a href="/data/{{ script.id }}/variants/{{ v.variant_id }}/history">History</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p><a href="/data/{{ script.id }}/products">&larr; Back to products</a></p>
+{% endblock %}

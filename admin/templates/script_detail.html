@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>{{ script.display_name }}</h2>
+  <p>{{ script.description or '' }}</p>
+</hgroup>
+
+<div class="grid">
+  <article>
+    <header><strong>Service Status</strong></header>
+    <table>
+      <tr>
+        <td>State</td>
+        <td>
+          {% if status.active_state == 'active' %}
+            <mark>{{ status.active_state }} ({{ status.sub_state }})</mark>
+          {% elif status.active_state == 'failed' %}
+            <mark class="error">Failed</mark>
+          {% else %}
+            {{ status.active_state }} ({{ status.sub_state }})
+          {% endif %}
+        </td>
+      </tr>
+      <tr><td>Last Run</td><td>{{ status.last_trigger or 'Never' }}</td></tr>
+      <tr><td>Next Run</td><td>{{ status.next_trigger or 'N/A' }}</td></tr>
+      <tr><td>Timer</td><td>{{ 'Active' if timer_active else 'Stopped' }}</td></tr>
+      {% if status.result and status.result != 'success' %}
+      <tr><td>Result</td><td><mark class="error">{{ status.result }}</mark></td></tr>
+      {% endif %}
+    </table>
+  </article>
+
+  <article>
+    <header><strong>Actions</strong></header>
+    <div role="group" style="flex-direction: column; gap: 0.5rem;">
+      <form method="post" action="/scripts/{{ script.id }}/start" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit" class="outline">Run Now</button>
+      </form>
+      <form method="post" action="/scripts/{{ script.id }}/stop" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit" class="outline secondary">Stop Timer</button>
+      </form>
+      <form method="post" action="/scripts/{{ script.id }}/restart" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit" class="outline contrast">Restart</button>
+      </form>
+    </div>
+    <footer>
+      <a href="/scripts/{{ script.id }}/config">Edit Configuration</a> |
+      <a href="/data/{{ script.id }}/products">Browse Data</a> |
+      <a href="/data/{{ script.id }}/crawl-history">Crawl History</a>
+    </footer>
+  </article>
+</div>
+
+{% if crawl_stats %}
+<article>
+  <header><strong>Recent Crawl Stats</strong> (last 50 runs)</header>
+  <div style="overflow-x: auto;">
+    <table>
+      <thead><tr><th>Run Time</th><th>Products Found</th></tr></thead>
+      <tbody>
+        {% for row in crawl_stats %}
+        <tr><td>{{ row.run_at }}</td><td>{{ row.product_count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endif %}
+
+<article>
+  <header>
+    <strong>Logs</strong> (last {{ log_lines }} lines)
+    <div role="group" style="float:right">
+      <a href="/scripts/{{ script.id }}/logs?lines=200" role="button" class="outline secondary" style="padding:4px 10px">200</a>
+      <a href="/scripts/{{ script.id }}/logs?lines=500" role="button" class="outline secondary" style="padding:4px 10px">500</a>
+      <a href="/scripts/{{ script.id }}/logs?lines=1000" role="button" class="outline secondary" style="padding:4px 10px">1000</a>
+    </div>
+  </header>
+  <pre style="max-height: 500px; overflow-y: auto; font-size: 0.8rem;" id="log-output">{{ logs }}</pre>
+</article>
+{% endblock %}

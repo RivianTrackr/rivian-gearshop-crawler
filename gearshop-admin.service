@@ -1,0 +1,18 @@
+[Unit]
+Description=Rivian Gearshop Admin UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rivian-gearshop-crawler
+ExecStart=/opt/rivian-gearshop-crawler/venv/bin/uvicorn admin.app:app --host 127.0.0.1 --port 8111
+Environment=PATH=/opt/rivian-gearshop-crawler/venv/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

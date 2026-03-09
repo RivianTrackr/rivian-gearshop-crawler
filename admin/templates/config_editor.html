@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Config — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Configuration — {{ script.display_name }}</h2>
+  <p>{{ script.env_file_path }}</p>
+</hgroup>
+
+<form method="post" action="/scripts/{{ script.id }}/config">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+  <table>
+    <thead>
+      <tr><th>Key</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+        {% if entry.type == 'env' %}
+        <tr>
+          <td>
+            <input type="hidden" name="key" value="{{ entry.key }}">
+            <code>{{ entry.key }}</code>
+            {% if entry.is_commented %}
+              <small>(disabled)</small>
+            {% endif %}
+          </td>
+          <td>
+            {% if entry.is_sensitive %}
+              <input type="password" name="value" value="{{ entry.value }}"
+                     style="font-family: monospace;" autocomplete="off">
+            {% else %}
+              <input type="text" name="value" value="{{ entry.value }}"
+                     style="font-family: monospace;">
+            {% endif %}
+          </td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="submit">Save Configuration</button>
+</form>
+
+<p><a href="/scripts/{{ script.id }}">&larr; Back to script detail</a></p>
+{% endblock %}

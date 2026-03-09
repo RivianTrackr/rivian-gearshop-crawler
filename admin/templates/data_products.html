@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Products — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Products — {{ script.display_name }}</h2>
+  <p>{{ total }} products total</p>
+</hgroup>
+
+<form method="get" action="/data/{{ script.id }}/products" style="margin-bottom: 1rem;">
+  <div role="group">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by title or handle...">
+    <button type="submit">Search</button>
+  </div>
+</form>
+
+<div style="overflow-x: auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Handle</th>
+        <th>Type</th>
+        <th>Vendor</th>
+        <th>Variants</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in products %}
+      <tr>
+        <td>{{ p.title or '—' }}</td>
+        <td><code>{{ p.handle }}</code></td>
+        <td>{{ p.product_type or '—' }}</td>
+        <td>{{ p.vendor or '—' }}</td>
+        <td>{{ p.variant_count }}</td>
+        <td><a href="/data/{{ script.id }}/products/{{ p.product_id }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<nav style="text-align: center;">
+  {% if page > 1 %}
+    <a href="/data/{{ script.id }}/products?page={{ page - 1 }}&q={{ q }}">&larr; Previous</a>
+  {% endif %}
+  <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="/data/{{ script.id }}/products?page={{ page + 1 }}&q={{ q }}">Next &rarr;</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+<p>
+  <a href="/data/{{ script.id }}/crawl-history">View Crawl History</a> |
+  <a href="/scripts/{{ script.id }}">&larr; Back to script detail</a>
+</p>
+{% endblock %}

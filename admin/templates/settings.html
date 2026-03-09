@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<h2>Settings</h2>
+
+<article>
+  <header><strong>Change Password</strong></header>
+  <form method="post" action="/settings/password">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <label for="current_password">Current Password</label>
+    <input type="password" id="current_password" name="current_password" required>
+
+    <label for="new_password">New Password</label>
+    <input type="password" id="new_password" name="new_password" required minlength="8">
+
+    <label for="confirm_password">Confirm New Password</label>
+    <input type="password" id="confirm_password" name="confirm_password" required minlength="8">
+
+    <button type="submit">Change Password</button>
+  </form>
+</article>
+
+<article>
+  <header><strong>Email Recipients</strong></header>
+  <form method="post" action="/settings/emails">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <label for="email_to">
+      Recipients (comma-separated)
+    </label>
+    <input type="text" id="email_to" name="email_to" value="{{ email_to }}"
+           placeholder="user1@example.com, user2@example.com">
+
+    <button type="submit">Update Recipients</button>
+  </form>
+</article>
+{% endblock %}
