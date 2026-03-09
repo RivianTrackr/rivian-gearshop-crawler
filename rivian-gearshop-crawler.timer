@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Rivian Gear Shop Crawler every 60 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60min
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

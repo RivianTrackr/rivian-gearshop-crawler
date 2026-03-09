@@ -51,88 +51,85 @@ def now_utc_iso() -> str:
 def today_utc_str() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    def write_json(rows, out_path="/opt/rivian-gearshop-crawler/gearshop.json"):
-        """Write a normalized snapshot for the website table."""
-        Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
-        payload = {
-            "generated_utc": int(time.time()),
-            "count": len(rows),
-            "items": rows,
-        }
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+def write_json(rows, out_path="/opt/rivian-gearshop-crawler/gearshop.json"):
+    """Write a normalized snapshot for the website table."""
+    Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_utc": int(time.time()),
+        "count": len(rows),
+        "items": rows,
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    def export_current_inventory_json(conn, out_path="/opt/rivian-gearshop-crawler/gearshop.json", site_root=None):
-        """
-        Build a flat list of the most recent snapshot per variant,
-        join products and variants, then write JSON for the front end.
-        """
-        if site_root is None:
-            site_root = (os.getenv("SITE_ROOT", "https://gearshop.rivian.com")).rstrip("/")
+def export_current_inventory_json(conn, out_path="/opt/rivian-gearshop-crawler/gearshop.json", site_root=None):
+    """
+    Build a flat list of the most recent snapshot per variant,
+    join products and variants, then write JSON for the front end.
+    """
+    if site_root is None:
+        site_root = (os.getenv("SITE_ROOT", "https://gearshop.rivian.com")).rstrip("/")
 
-        # latest snapshot per variant
-        sql = """
-        WITH latest AS (
-          SELECT variant_id, MAX(crawled_at) AS max_crawled
-          FROM snapshots
-          GROUP BY variant_id
-        )
-        SELECT
-          p.product_id,
-          p.handle,
-          p.title          AS product_title,
-          p.vendor,
-          p.product_type,
-          COALESCE(p.url, (? || '/products/' || p.handle)) AS product_url,
-          v.variant_id,
-          v.title          AS variant_title,
-          v.sku,
-          s.price_cents,
-          s.compare_at_cents,
-          s.available,
-          l.max_crawled    AS last_seen
-        FROM latest l
-        JOIN snapshots s ON s.variant_id = l.variant_id AND s.crawled_at = l.max_crawled
-        JOIN variants  v ON v.variant_id = s.variant_id
-        JOIN products  p ON p.product_id = s.product_id
-        ORDER BY p.title, v.title
-        """
-        cur = conn.execute(sql, (site_root,))
-        rows_db = cur.fetchall()
+    sql = """
+    WITH latest AS (
+      SELECT variant_id, MAX(crawled_at) AS max_crawled
+      FROM snapshots
+      GROUP BY variant_id
+    )
+    SELECT
+      p.product_id,
+      p.handle,
+      p.title          AS product_title,
+      p.vendor,
+      p.product_type,
+      COALESCE(p.url, (? || '/products/' || p.handle)) AS product_url,
+      v.variant_id,
+      v.title          AS variant_title,
+      v.sku,
+      s.price_cents,
+      s.compare_at_cents,
+      s.available,
+      l.max_crawled    AS last_seen
+    FROM latest l
+    JOIN snapshots s ON s.variant_id = l.variant_id AND s.crawled_at = l.max_crawled
+    JOIN variants  v ON v.variant_id = s.variant_id
+    JOIN products  p ON p.product_id = s.product_id
+    ORDER BY p.title, v.title
+    """
+    cur = conn.execute(sql, (site_root,))
+    rows_db = cur.fetchall()
 
-        rows = []
-        for r in rows_db:
-            product_title   = r["product_title"] or ""
-            variant_title   = (r["variant_title"] or "").strip()
-            # avoid noisy "Default Title"
-            nice_title = product_title if variant_title in ("", "Default Title") else f"{product_title} ({variant_title})"
+    rows = []
+    for r in rows_db:
+        product_title   = r["product_title"] or ""
+        variant_title   = (r["variant_title"] or "").strip()
+        nice_title = product_title if variant_title in ("", "Default Title") else f"{product_title} ({variant_title})"
 
-            price_cents     = r["price_cents"]
-            price           = None if price_cents is None else round(price_cents / 100, 2)
+        price_cents     = r["price_cents"]
+        price           = None if price_cents is None else round(price_cents / 100, 2)
 
-            availability    = "In stock" if r["available"] == 1 else "Sold out"
+        availability    = "In stock" if r["available"] == 1 else "Sold out"
 
-            # last_seen is ISO string in UTC, convert to epoch for consistency
-            try:
-                dt = datetime.fromisoformat(r["last_seen"].replace("Z", "+00:00"))
-                last_seen_utc = int(dt.timestamp())
-            except Exception:
-                last_seen_utc = None
+        try:
+            dt = datetime.fromisoformat(r["last_seen"].replace("Z", "+00:00"))
+            last_seen_utc = int(dt.timestamp())
+        except Exception:
+            last_seen_utc = None
 
-            rows.append({
-                "title":        nice_title,
-                "sku":          r["sku"] or "",
-                "variant_id":   r["variant_id"],
-                "price":        price,
-                "availability": availability,
-                "url":          r["product_url"],
-                "image":        None,          # not stored in DB, keep placeholder
-                "category":     r["product_type"] or "",
-                "last_seen_utc": last_seen_utc,
-            })
+        rows.append({
+            "title":        nice_title,
+            "sku":          r["sku"] or "",
+            "variant_id":   r["variant_id"],
+            "price":        price,
+            "availability": availability,
+            "url":          r["product_url"],
+            "image":        None,
+            "category":     r["product_type"] or "",
+            "last_seen_utc": last_seen_utc,
+        })
 
-        write_json(rows, out_path=out_path)
-        print(f"[OK] wrote JSON with {len(rows)} items to {out_path}")
+    write_json(rows, out_path=out_path)
+    print(f"[OK] wrote JSON with {len(rows)} items to {out_path}")
 
 # ---------------------- SQLite Schema ----------------------
 
@@ -791,6 +788,14 @@ def main():
             (crawled_at, len(handle_to_url))
         )
         _conn_stats.commit()
+
+    # Export current inventory to JSON for frontend consumption
+    with db() as _conn_out:
+        export_current_inventory_json(
+            _conn_out,
+            out_path=os.getenv("JSON_OUT_PATH", "/opt/rivian-gearshop-crawler/gearshop.json"),
+            site_root=SITE_ROOT
+        )
 
 if __name__ == "__main__":
     main()
