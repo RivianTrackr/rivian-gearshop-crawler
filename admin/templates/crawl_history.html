@@ -15,7 +15,7 @@
     <tbody>
       {% for row in stats %}
       <tr>
-        <td>{{ row.run_at }}</td>
+        <td><span class="utc-time" data-utc="{{ row.run_at }}">{{ row.run_at }}</span></td>
         <td>{{ row.product_count }}</td>
       </tr>
       {% endfor %}

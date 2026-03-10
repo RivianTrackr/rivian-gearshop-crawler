@@ -26,7 +26,7 @@
     <tbody>
       {% for s in snapshots %}
       <tr>
-        <td>{{ s.crawled_at }}</td>
+        <td><span class="utc-time" data-utc="{{ s.crawled_at }}">{{ s.crawled_at }}</span></td>
         <td>
           {% if s.price_cents is not none %}
             ${{ "%.2f"|format(s.price_cents / 100) }}

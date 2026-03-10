@@ -17,8 +17,8 @@
 
 <table>
   <tr><td><strong>Product ID</strong></td><td>{{ product.product_id }}</td></tr>
-  <tr><td><strong>Created</strong></td><td>{{ product.created_at or '—' }}</td></tr>
-  <tr><td><strong>Updated</strong></td><td>{{ product.updated_at or '—' }}</td></tr>
+  <tr><td><strong>Created</strong></td><td><span class="utc-time" data-utc="{{ product.created_at or '' }}">{{ product.created_at or '—' }}</span></td></tr>
+  <tr><td><strong>Updated</strong></td><td><span class="utc-time" data-utc="{{ product.updated_at or '' }}">{{ product.updated_at or '—' }}</span></td></tr>
 </table>
 
 <h3>Variants</h3>
@@ -63,7 +63,7 @@
             —
           {% endif %}
         </td>
-        <td>{{ v.crawled_at or '—' }}</td>
+        <td><span class="utc-time" data-utc="{{ v.crawled_at or '' }}">{{ v.crawled_at or '—' }}</span></td>
         <td><a href="/data/{{ script.id }}/variants/{{ v.variant_id }}/history">History</a></td>
       </tr>
       {% endfor %}
