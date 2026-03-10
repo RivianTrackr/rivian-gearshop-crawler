@@ -1,0 +1,40 @@
+/* ==========================================================================
+   Dark Theme — Deep blue-black palette with amber accent
+   Inspired by the Rivian Tire Guide frontend
+   Apply via: <body class="theme-dark"> or [data-theme="dark"]
+   ========================================================================== */
+
+.theme-dark,
+[data-theme="dark"] {
+  /* --- Accent --- */
+  --accent: #fba919;
+  --accent-hover: #ffbe4a;
+
+  /* --- Backgrounds --- */
+  --bg-primary: #121e2b;
+  --bg-card: #121e2b;
+  --bg-input: #374151;
+  --bg-deep: #0f1a26;
+  --bg-hover: #1a2a3a;
+
+  /* --- Text --- */
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-heading: #f3f4f6;
+  --text-on-accent: #0f172a;
+
+  /* --- Borders --- */
+  --border: #374151;
+  --border-hover: #4b5563;
+  --divider: #1e2d3d;
+
+  /* --- Interactive tints (using color-mix) --- */
+  --accent-tint-8: color-mix(in srgb, var(--accent) 8%, var(--bg-deep));
+  --accent-tint-15: color-mix(in srgb, var(--accent) 15%, var(--bg-deep));
+  --accent-tint-25: color-mix(in srgb, var(--accent) 25%, transparent);
+
+  /* --- Apply base colors --- */
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+}

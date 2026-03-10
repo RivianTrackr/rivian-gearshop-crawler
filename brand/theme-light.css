@@ -1,0 +1,40 @@
+/* ==========================================================================
+   Light Theme — Apple/iOS-inspired clean palette
+   Inspired by the Rivian Tire Guide admin panel
+   Apply via: <body class="theme-light"> or [data-theme="light"]
+   ========================================================================== */
+
+.theme-light,
+[data-theme="light"] {
+  /* --- Accent --- */
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+
+  /* --- Backgrounds --- */
+  --bg-primary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-deep: #f5f5f7;
+  --bg-hover: #e8e8ed;
+
+  /* --- Text --- */
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-muted: #86868b;
+  --text-heading: #1d1d1f;
+  --text-on-accent: #ffffff;
+
+  /* --- Borders --- */
+  --border: #d2d2d7;
+  --border-hover: #b0b0b5;
+  --divider: #f5f5f7;
+
+  /* --- Interactive tints --- */
+  --accent-tint-8: color-mix(in srgb, var(--accent) 8%, var(--bg-deep));
+  --accent-tint-15: color-mix(in srgb, var(--accent) 15%, var(--bg-deep));
+  --accent-tint-25: color-mix(in srgb, var(--accent) 25%, transparent);
+
+  /* --- Apply base colors --- */
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+}

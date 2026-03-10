@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reusable Design System — Demo</title>
+  <link rel="stylesheet" href="design-tokens.css">
+  <link rel="stylesheet" href="theme-dark.css">
+  <link rel="stylesheet" href="theme-light.css">
+  <link rel="stylesheet" href="components.css">
+  <style>
+    .demo-section { margin-bottom: 40px; }
+    .demo-section h3 { margin: 0 0 16px; font-size: 18px; color: var(--text-heading); }
+    .demo-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .theme-switcher { position: fixed; top: 16px; right: 16px; z-index: 100; }
+    .color-swatch { width: 60px; height: 60px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  </style>
+</head>
+<body class="theme-dark">
+  <div class="container" style="padding-top: 40px; padding-bottom: 60px;">
+
+    <!-- Theme Switcher -->
+    <div class="theme-switcher">
+      <button class="btn btn-secondary" onclick="document.body.classList.toggle('theme-dark'); document.body.classList.toggle('theme-light');">
+        Toggle Theme
+      </button>
+    </div>
+
+    <div class="page-header">
+      <h1 class="page-title">Design System Demo</h1>
+    </div>
+
+    <!-- Colors -->
+    <div class="demo-section">
+      <h3>Theme Colors</h3>
+      <div class="demo-row">
+        <div class="color-swatch" style="background: var(--accent);">accent</div>
+        <div class="color-swatch" style="background: var(--bg-primary);">bg-primary</div>
+        <div class="color-swatch" style="background: var(--bg-card);">bg-card</div>
+        <div class="color-swatch" style="background: var(--bg-input);">bg-input</div>
+        <div class="color-swatch" style="background: var(--bg-deep);">bg-deep</div>
+        <div class="color-swatch" style="background: var(--border);">border</div>
+      </div>
+      <div class="demo-row">
+        <div class="color-swatch" style="background: var(--color-success);">success</div>
+        <div class="color-swatch" style="background: var(--color-error);">error</div>
+        <div class="color-swatch" style="background: var(--grade-a);">A</div>
+        <div class="color-swatch" style="background: var(--grade-b);">B</div>
+        <div class="color-swatch" style="background: var(--grade-c);">C</div>
+        <div class="color-swatch" style="background: var(--grade-d);">D</div>
+        <div class="color-swatch" style="background: var(--grade-f);">F</div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Buttons -->
+    <div class="demo-section">
+      <h3>Buttons</h3>
+      <div class="demo-row">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-danger">Danger</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Badges -->
+    <div class="demo-section">
+      <h3>Badges</h3>
+      <div class="demo-row">
+        <span class="badge badge-success">Success</span>
+        <span class="badge badge-error">Error</span>
+        <span class="badge badge-warning">Warning</span>
+        <span class="badge badge-info">Info</span>
+        <span class="badge badge-muted">Muted</span>
+        <span class="badge-new">NEW</span>
+      </div>
+      <div class="demo-row" style="margin-top: 12px;">
+        <span class="grade grade-a">A</span>
+        <span class="grade grade-b">B</span>
+        <span class="grade grade-c">C</span>
+        <span class="grade grade-d">D</span>
+        <span class="grade grade-f">F</span>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Inputs -->
+    <div class="demo-section">
+      <h3>Inputs</h3>
+      <div style="max-width: 400px;">
+        <div class="field-row">
+          <label class="field-label">Text Input</label>
+          <p class="field-description">A standard text input with focus ring.</p>
+          <input class="input" type="text" placeholder="Type something...">
+        </div>
+        <div class="field-row">
+          <label class="field-label">Select</label>
+          <select class="select">
+            <option>Option 1</option>
+            <option>Option 2</option>
+            <option>Option 3</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Search Bar -->
+    <div class="demo-section">
+      <h3>Search Bar</h3>
+      <div class="search-row" style="max-width: 600px;">
+        <div class="search-input-wrap">
+          <input class="input input-wide" type="search" placeholder="Search for something...">
+        </div>
+        <button class="search-btn">Search</button>
+        <button class="btn btn-primary">AI Search</button>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Toggle -->
+    <div class="demo-section">
+      <h3>Toggle Switch</h3>
+      <label class="toggle">
+        <input type="checkbox" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-label">Enable feature</span>
+      </label>
+    </div>
+
+    <hr>
+
+    <!-- Notices -->
+    <div class="demo-section">
+      <h3>Notices</h3>
+      <div class="notice notice-success">Success — Everything is working correctly.</div>
+      <div class="notice notice-error">Error — Something went wrong.</div>
+      <div class="notice notice-warning">Warning — Please review this item.</div>
+      <div class="notice notice-info">Info — Here's some useful information.</div>
+    </div>
+
+    <hr>
+
+    <!-- Cards -->
+    <div class="demo-section">
+      <h3>Cards</h3>
+      <div class="card">
+        <div class="card-header">
+          <h2>Card Title</h2>
+          <p>A description of what this card contains.</p>
+        </div>
+        <div class="card-body">
+          <p style="margin: 0;">Card body content goes here. This card uses the same styling pattern from the admin panel.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Stats Grid -->
+    <div class="demo-section">
+      <h3>Stats Grid</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">1,234</div>
+          <div class="stat-label">Total Items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">567</div>
+          <div class="stat-label">Active</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">89%</div>
+          <div class="stat-label">Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">42</div>
+          <div class="stat-label">Reviews</div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Status Card -->
+    <div class="demo-section">
+      <h3>Status Cards</h3>
+      <div class="status-card is-active">
+        <div class="status-icon is-active">&#10003;</div>
+        <div>
+          <h3 style="margin:0; font-size:16px; color: var(--color-success-text);">Active</h3>
+          <p style="margin:0; font-size:14px; color: var(--text-secondary);">Everything is running smoothly.</p>
+        </div>
+      </div>
+      <div class="status-card">
+        <div class="status-icon is-inactive">&#10007;</div>
+        <div>
+          <h3 style="margin:0; font-size:16px;">Inactive</h3>
+          <p style="margin:0; font-size:14px; color: var(--text-secondary);">This feature is currently disabled.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Summary Banner -->
+    <div class="demo-section">
+      <h3>Summary Banner</h3>
+      <div class="summary-banner">
+        <span class="summary-banner-icon">&#9733;</span>
+        <div class="summary-banner-text">
+          <strong>AI Recommendation</strong>
+          <p>Based on your preferences, we recommend this option. It has the highest ratings and best value for your use case.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Table -->
+    <div class="demo-section">
+      <h3>Table</h3>
+      <div class="card">
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Grade</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Item Alpha</td>
+                <td><span class="badge badge-success">Active</span></td>
+                <td><span class="grade grade-a">A</span></td>
+                <td>$129.99</td>
+              </tr>
+              <tr>
+                <td>Item Beta</td>
+                <td><span class="badge badge-warning">Pending</span></td>
+                <td><span class="grade grade-b">B</span></td>
+                <td>$89.50</td>
+              </tr>
+              <tr>
+                <td>Item Gamma</td>
+                <td><span class="badge badge-error">Inactive</span></td>
+                <td><span class="grade grade-d">D</span></td>
+                <td>$45.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Loading / Spinner -->
+    <div class="demo-section">
+      <h3>Loading &amp; Error States</h3>
+      <div class="loading">
+        <div class="spinner"></div>
+        Loading results...
+      </div>
+      <div class="error-message" style="margin-top: 12px;">
+        &#9888; Failed to load data. Please try again.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
