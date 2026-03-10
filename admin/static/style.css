@@ -1,42 +1,247 @@
-/* Gearshop Admin — minimal overrides on Pico CSS */
+/* ============================================================
+   RivianTrackr — Admin Design System
+   Light theme (admin panel) with design tokens from the
+   RivianTrackr Branding & Design System v1.27.0
+   ============================================================ */
+
+/* ---------- Design Tokens ---------- */
+
+:root {
+  /* Brand Accent */
+  --rtg-accent:          #fba919;
+  --rtg-accent-hover:    #fba919;
+
+  /* Light Theme (Admin Panel) */
+  --rtg-action-primary:  #0071e3;
+  --rtg-action-hover:    #0077ed;
+  --rtg-text-primary:    #1d1d1f;
+  --rtg-text-secondary:  #6e6e73;
+  --rtg-text-muted:      #86868b;
+  --rtg-success:         #34c759;
+  --rtg-success-light:   #d1f4e0;
+  --rtg-error:           #ff3b30;
+  --rtg-error-light:     #ffe5e5;
+  --rtg-warning-bg:      #fff3cd;
+  --rtg-info-bg:         #dbeafe;
+  --rtg-border:          #d2d2d7;
+  --rtg-bg-light:        #f5f5f7;
+  --rtg-bg-hover:        #e8e8ed;
+  --rtg-white:           #ffffff;
+
+  /* Border Radius */
+  --rtg-radius-card:     12px;
+  --rtg-radius-input:    8px;
+  --rtg-radius-badge:    6px;
+  --rtg-radius-pill:     4px;
+  --rtg-radius-toggle:   34px;
+
+  /* Shadows */
+  --rtg-shadow-subtle:   0 1px 3px rgba(0,0,0,0.2);
+  --rtg-shadow-light:    0 2px 8px rgba(0,0,0,0.15);
+  --rtg-shadow-medium:   0 4px 12px rgba(0,0,0,0.4);
+  --rtg-shadow-large:    0 8px 24px rgba(0,0,0,0.3);
+  --rtg-shadow-overlay:  0 25px 60px rgba(0,0,0,0.5);
+  --rtg-shadow-focus:    0 0 0 2px var(--rtg-accent);
+
+  /* Typography */
+  --rtg-font-primary:    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  --rtg-font-mono:       'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+
+  /* Grade Colors */
+  --rtg-grade-a:         #34c759;
+  --rtg-grade-b:         #7dc734;
+  --rtg-grade-c:         #facc15;
+  --rtg-grade-d:         #f97316;
+  --rtg-grade-f:         #b91c1c;
+}
+
+/* ---------- Base Overrides ---------- */
+
+body {
+  font-family: var(--rtg-font-primary);
+  color: var(--rtg-text-primary);
+}
+
+/* ---------- Navigation ---------- */
+
+nav {
+  border-bottom: 1px solid var(--rtg-border);
+}
+
+nav .brand-name {
+  color: var(--rtg-text-primary);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+nav .brand-accent {
+  color: var(--rtg-accent);
+}
 
 nav .outline {
   font-size: 0.85rem;
 }
 
-mark.error {
-  background-color: var(--pico-color-red-500, #e53935);
-  color: white;
+/* ---------- Buttons ---------- */
+
+button[type="submit"],
+.btn-primary {
+  background: var(--rtg-action-primary);
+  border-color: var(--rtg-action-primary);
+  color: var(--rtg-white);
+  border-radius: var(--rtg-radius-input);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+button[type="submit"]:hover,
+.btn-primary:hover {
+  background: var(--rtg-action-hover);
+  border-color: var(--rtg-action-hover);
+}
+
+.btn-accent {
+  background: var(--rtg-accent);
+  border-color: var(--rtg-accent);
+  color: #0f172a;
+  border-radius: var(--rtg-radius-input);
+}
+
+.btn-accent:hover {
+  background: var(--rtg-accent-hover);
+  border-color: var(--rtg-accent-hover);
+  color: #0f172a;
+}
+
+.btn-destructive {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: var(--rtg-white);
+}
+
+/* ---------- Focus ---------- */
+
+:focus-visible {
+  outline: 2px solid var(--rtg-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Inputs ---------- */
+
+input, select, textarea {
+  border-radius: var(--rtg-radius-input);
+  border-color: var(--rtg-border);
+  transition: border-color 0.15s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--rtg-action-primary);
+  box-shadow: var(--rtg-shadow-focus);
+}
+
+/* ---------- Cards / Articles ---------- */
+
+article {
+  border-radius: var(--rtg-radius-card);
+  border: 1px solid var(--rtg-border);
+  box-shadow: var(--rtg-shadow-subtle);
+}
+
+/* ---------- Badges ---------- */
+
+mark.error {
+  background-color: var(--rtg-error);
+  color: var(--rtg-white);
+  border-radius: var(--rtg-radius-badge);
+  padding: 2px 8px;
+}
+
+mark.success {
+  background-color: var(--rtg-success);
+  color: var(--rtg-white);
+  border-radius: var(--rtg-radius-badge);
+  padding: 2px 8px;
+}
+
+/* ---------- Flash Messages ---------- */
+
 article.flash-success {
-  border-left: 4px solid var(--pico-color-green-500, #43a047);
+  border-left: 4px solid var(--rtg-success);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--pico-color-green-50, #e8f5e9);
+  background: var(--rtg-success-light);
+  border-radius: var(--rtg-radius-pill);
 }
 
 article.flash-error {
-  border-left: 4px solid var(--pico-color-red-500, #e53935);
+  border-left: 4px solid var(--rtg-error);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--pico-color-red-50, #ffebee);
+  background: var(--rtg-error-light);
+  border-radius: var(--rtg-radius-pill);
 }
 
 article.flash-info {
-  border-left: 4px solid var(--pico-color-blue-500, #1e88e5);
+  border-left: 4px solid var(--rtg-action-primary);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--pico-color-blue-50, #e3f2fd);
+  background: var(--rtg-info-bg);
+  border-radius: var(--rtg-radius-pill);
 }
 
-pre#log-output {
-  background: #1a1a2e;
-  color: #e0e0e0;
-  padding: 1rem;
-  border-radius: 4px;
+article.flash-warning {
+  border-left: 4px solid var(--rtg-accent);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--rtg-warning-bg);
+  border-radius: var(--rtg-radius-pill);
 }
+
+/* ---------- Log Output ---------- */
+
+pre#log-output {
+  background: #121e2b;
+  color: #e5e7eb;
+  padding: 1rem;
+  border-radius: var(--rtg-radius-card);
+  font-family: var(--rtg-font-mono);
+  font-size: 13px;
+  border: 1px solid #374151;
+}
+
+/* ---------- Tables ---------- */
 
 table code {
   font-size: 0.85em;
+  font-family: var(--rtg-font-mono);
+}
+
+/* ---------- Footer ---------- */
+
+footer {
+  border-top: 1px solid var(--rtg-border);
+  color: var(--rtg-text-muted);
+  padding-top: 1rem;
+  margin-top: 2rem;
+}
+
+footer small {
+  color: var(--rtg-text-muted);
+}
+
+/* ---------- Brand Gradient (decorative) ---------- */
+
+.brand-gradient {
+  background: linear-gradient(135deg, #fba919, #d2de24, #86c440, #5ec095, #34c5ec, #2b96d2, #3571b8, #534da0, #d11d55, #ef3d6c, #ed1a36, #ee383a);
+  height: 3px;
+  width: 100%;
+}
+
+/* ---------- Accessibility ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS managed_scripts (
 
 DEFAULT_SCRIPT = {
     "name": "rivian-gearshop-crawler",
-    "display_name": "Rivian Gear Shop Crawler",
+    "display_name": "RivianTrackr Gear Shop Crawler",
     "service_unit": "rivian-gearshop-crawler.service",
     "timer_unit": "rivian-gearshop-crawler.timer",
     "env_file_path": "/opt/rivian-gearshop-crawler/.env",
