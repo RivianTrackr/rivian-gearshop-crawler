@@ -1,0 +1,42 @@
+/* Gearshop Admin — minimal overrides on Pico CSS */
+
+nav .outline {
+  font-size: 0.85rem;
+}
+
+mark.error {
+  background-color: var(--pico-color-red-500, #e53935);
+  color: white;
+}
+
+article.flash-success {
+  border-left: 4px solid var(--pico-color-green-500, #43a047);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--pico-color-green-50, #e8f5e9);
+}
+
+article.flash-error {
+  border-left: 4px solid var(--pico-color-red-500, #e53935);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--pico-color-red-50, #ffebee);
+}
+
+article.flash-info {
+  border-left: 4px solid var(--pico-color-blue-500, #1e88e5);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--pico-color-blue-50, #e3f2fd);
+}
+
+pre#log-output {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+table code {
+  font-size: 0.85em;
+}

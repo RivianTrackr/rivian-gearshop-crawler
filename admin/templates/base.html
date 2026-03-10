@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin{% endblock %} — Gearshop Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>Gearshop Admin</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/settings">Settings</a></li>
+      <li>
+        <form method="post" action="/logout" style="margin:0">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button type="submit" class="outline secondary" style="margin:0;padding:4px 12px">Logout</button>
+        </form>
+      </li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    {% if flash_message %}
+    <article class="flash-{{ flash_type|default('info') }}">
+      {{ flash_message }}
+    </article>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="container">
+    <small>Gearshop Admin</small>
+  </footer>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

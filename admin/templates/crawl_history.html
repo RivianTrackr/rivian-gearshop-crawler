@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Crawl History — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Crawl History — {{ script.display_name }}</h2>
+  <p>{{ total }} total runs</p>
+</hgroup>
+
+<div style="overflow-x: auto;">
+  <table>
+    <thead>
+      <tr><th>Run Time</th><th>Products Found</th></tr>
+    </thead>
+    <tbody>
+      {% for row in stats %}
+      <tr>
+        <td>{{ row.run_at }}</td>
+        <td>{{ row.product_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<nav style="text-align: center;">
+  {% if page > 1 %}
+    <a href="/data/{{ script.id }}/crawl-history?page={{ page - 1 }}">&larr; Previous</a>
+  {% endif %}
+  <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="/data/{{ script.id }}/crawl-history?page={{ page + 1 }}">Next &rarr;</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+<p>
+  <a href="/data/{{ script.id }}/products">Browse Products</a> |
+  <a href="/scripts/{{ script.id }}">&larr; Back to script detail</a>
+</p>
+{% endblock %}

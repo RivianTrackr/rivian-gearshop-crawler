@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Variant History{% endblock %}
+
+{% block content %}
+{% if snapshots %}
+<hgroup>
+  <h2>{{ snapshots[0].product_title }} — {{ snapshots[0].variant_title or 'Default' }}</h2>
+  <p>Variant ID: {{ variant_id }} | Last {{ snapshots|length }} snapshots</p>
+</hgroup>
+{% else %}
+<h2>Variant {{ variant_id }}</h2>
+<p>No snapshot history found.</p>
+{% endif %}
+
+{% if snapshots %}
+<div style="overflow-x: auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Crawled At</th>
+        <th>Price</th>
+        <th>Compare At</th>
+        <th>Available</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in snapshots %}
+      <tr>
+        <td>{{ s.crawled_at }}</td>
+        <td>
+          {% if s.price_cents is not none %}
+            ${{ "%.2f"|format(s.price_cents / 100) }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if s.compare_at_cents is not none %}
+            ${{ "%.2f"|format(s.compare_at_cents / 100) }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if s.available == 1 %}
+            <mark>In Stock</mark>
+          {% elif s.available == 0 %}
+            Sold Out
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<p><a href="javascript:history.back()">&larr; Back</a></p>
+{% endblock %}

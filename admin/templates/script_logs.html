@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Logs — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Logs — {{ script.display_name }}</h2>
+  <p>Showing last {{ log_lines }} lines{% if since %} since {{ since }}{% endif %}</p>
+</hgroup>
+
+<div role="group" style="margin-bottom: 1rem;">
+  <a href="/scripts/{{ script.id }}/logs?lines=100" role="button" class="outline secondary">100</a>
+  <a href="/scripts/{{ script.id }}/logs?lines=200" role="button" class="outline secondary">200</a>
+  <a href="/scripts/{{ script.id }}/logs?lines=500" role="button" class="outline secondary">500</a>
+  <a href="/scripts/{{ script.id }}/logs?lines=1000" role="button" class="outline secondary">1000</a>
+  <a href="/scripts/{{ script.id }}/logs?lines=2000" role="button" class="outline secondary">2000</a>
+</div>
+
+<form method="get" action="/scripts/{{ script.id }}/logs" style="margin-bottom: 1rem;">
+  <div class="grid">
+    <label>
+      Lines
+      <input type="number" name="lines" value="{{ log_lines }}" min="10" max="2000">
+    </label>
+    <label>
+      Since (e.g. "1h ago", "2024-01-01")
+      <input type="text" name="since" value="{{ since or '' }}" placeholder="1h ago">
+    </label>
+    <label>
+      &nbsp;
+      <button type="submit">Filter</button>
+    </label>
+  </div>
+</form>
+
+<pre style="max-height: 80vh; overflow-y: auto; font-size: 0.8rem;" id="log-output">{{ logs }}</pre>
+
+<p><a href="/scripts/{{ script.id }}">&larr; Back to script detail</a></p>
+{% endblock %}
