@@ -1,6 +1,6 @@
 /* ============================================================
    RivianTrackr — Admin Design System
-   Light theme (admin panel) with design tokens from the
+   Dark theme (admin panel) with design tokens from the
    RivianTrackr Branding & Design System v1.27.0
    ============================================================ */
 
@@ -11,22 +11,34 @@
   --rtg-accent:          #fba919;
   --rtg-accent-hover:    #fba919;
 
-  /* Light Theme (Admin Panel) */
-  --rtg-action-primary:  #0071e3;
-  --rtg-action-hover:    #0077ed;
-  --rtg-text-primary:    #1d1d1f;
-  --rtg-text-secondary:  #6e6e73;
-  --rtg-text-muted:      #86868b;
+  /* Dark Theme — Backgrounds */
+  --rtg-bg-page:         #0b121c;
+  --rtg-bg-surface:      #121e2b;
+  --rtg-bg-card:         #121e2b;
+  --rtg-bg-input:        #1a2736;
+  --rtg-bg-deep:         #0f1a26;
+  --rtg-bg-hover:        #1e2d3d;
+
+  /* Dark Theme — Text */
+  --rtg-text-primary:    #e5e7eb;
+  --rtg-text-secondary:  #9ca3af;
+  --rtg-text-muted:      #6b7280;
+  --rtg-text-heading:    #e5e7eb;
+
+  /* Dark Theme — Borders */
+  --rtg-border:          #374151;
+
+  /* Actions */
+  --rtg-action-primary:  #fba919;
+  --rtg-action-hover:    #e69a10;
+
+  /* Status */
   --rtg-success:         #34c759;
-  --rtg-success-light:   #d1f4e0;
+  --rtg-success-dark:    rgba(52,199,89,0.15);
   --rtg-error:           #ff3b30;
-  --rtg-error-light:     #ffe5e5;
-  --rtg-warning-bg:      #fff3cd;
-  --rtg-info-bg:         #dbeafe;
-  --rtg-border:          #d2d2d7;
-  --rtg-bg-light:        #f5f5f7;
-  --rtg-bg-hover:        #e8e8ed;
-  --rtg-white:           #ffffff;
+  --rtg-error-dark:      rgba(255,59,48,0.15);
+  --rtg-warning-dark:    rgba(251,169,25,0.15);
+  --rtg-info-dark:       rgba(0,113,227,0.15);
 
   /* Border Radius */
   --rtg-radius-card:     12px;
@@ -36,11 +48,11 @@
   --rtg-radius-toggle:   34px;
 
   /* Shadows */
-  --rtg-shadow-subtle:   0 1px 3px rgba(0,0,0,0.2);
-  --rtg-shadow-light:    0 2px 8px rgba(0,0,0,0.15);
-  --rtg-shadow-medium:   0 4px 12px rgba(0,0,0,0.4);
-  --rtg-shadow-large:    0 8px 24px rgba(0,0,0,0.3);
-  --rtg-shadow-overlay:  0 25px 60px rgba(0,0,0,0.5);
+  --rtg-shadow-subtle:   0 1px 3px rgba(0,0,0,0.4);
+  --rtg-shadow-light:    0 2px 8px rgba(0,0,0,0.3);
+  --rtg-shadow-medium:   0 4px 12px rgba(0,0,0,0.5);
+  --rtg-shadow-large:    0 8px 24px rgba(0,0,0,0.5);
+  --rtg-shadow-overlay:  0 25px 60px rgba(0,0,0,0.7);
   --rtg-shadow-focus:    0 0 0 2px var(--rtg-accent);
 
   /* Typography */
@@ -60,12 +72,30 @@
 body {
   font-family: var(--rtg-font-primary);
   color: var(--rtg-text-primary);
+  background-color: var(--rtg-bg-page);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--rtg-text-heading);
+}
+
+a {
+  color: var(--rtg-accent);
+}
+
+a:hover {
+  color: var(--rtg-accent-hover);
+}
+
+hr {
+  border-color: var(--rtg-border);
 }
 
 /* ---------- Navigation ---------- */
 
 nav {
   border-bottom: 1px solid var(--rtg-border);
+  background-color: var(--rtg-bg-surface);
 }
 
 nav .brand-name {
@@ -78,8 +108,23 @@ nav .brand-accent {
   color: var(--rtg-accent);
 }
 
+nav a {
+  color: var(--rtg-text-secondary);
+}
+
+nav a:hover {
+  color: var(--rtg-text-primary);
+}
+
 nav .outline {
   font-size: 0.85rem;
+  color: var(--rtg-text-secondary);
+  border-color: var(--rtg-border);
+}
+
+nav .outline:hover {
+  color: var(--rtg-text-primary);
+  border-color: var(--rtg-text-muted);
 }
 
 /* ---------- Buttons ---------- */
@@ -88,7 +133,7 @@ button[type="submit"],
 .btn-primary {
   background: var(--rtg-action-primary);
   border-color: var(--rtg-action-primary);
-  color: var(--rtg-white);
+  color: #0f172a;
   border-radius: var(--rtg-radius-input);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -97,6 +142,7 @@ button[type="submit"]:hover,
 .btn-primary:hover {
   background: var(--rtg-action-hover);
   border-color: var(--rtg-action-hover);
+  color: #0f172a;
 }
 
 .btn-accent {
@@ -115,7 +161,7 @@ button[type="submit"]:hover,
 .btn-destructive {
   background: #ef4444;
   border-color: #ef4444;
-  color: var(--rtg-white);
+  color: #fff;
 }
 
 /* ---------- Focus ---------- */
@@ -130,12 +176,18 @@ button[type="submit"]:hover,
 input, select, textarea {
   border-radius: var(--rtg-radius-input);
   border-color: var(--rtg-border);
+  background-color: var(--rtg-bg-input);
+  color: var(--rtg-text-primary);
   transition: border-color 0.15s ease;
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: var(--rtg-action-primary);
+  border-color: var(--rtg-accent);
   box-shadow: var(--rtg-shadow-focus);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--rtg-text-muted);
 }
 
 /* ---------- Cards / Articles ---------- */
@@ -144,20 +196,25 @@ article {
   border-radius: var(--rtg-radius-card);
   border: 1px solid var(--rtg-border);
   box-shadow: var(--rtg-shadow-subtle);
+  background-color: var(--rtg-bg-card);
+}
+
+article header {
+  color: var(--rtg-text-heading);
 }
 
 /* ---------- Badges ---------- */
 
 mark.error {
   background-color: var(--rtg-error);
-  color: var(--rtg-white);
+  color: #fff;
   border-radius: var(--rtg-radius-badge);
   padding: 2px 8px;
 }
 
 mark.success {
   background-color: var(--rtg-success);
-  color: var(--rtg-white);
+  color: #fff;
   border-radius: var(--rtg-radius-badge);
   padding: 2px 8px;
 }
@@ -168,47 +225,64 @@ article.flash-success {
   border-left: 4px solid var(--rtg-success);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--rtg-success-light);
+  background: var(--rtg-success-dark);
   border-radius: var(--rtg-radius-pill);
+  color: var(--rtg-success);
 }
 
 article.flash-error {
   border-left: 4px solid var(--rtg-error);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--rtg-error-light);
+  background: var(--rtg-error-dark);
   border-radius: var(--rtg-radius-pill);
+  color: var(--rtg-error);
 }
 
 article.flash-info {
-  border-left: 4px solid var(--rtg-action-primary);
+  border-left: 4px solid var(--rtg-accent);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--rtg-info-bg);
+  background: var(--rtg-info-dark);
   border-radius: var(--rtg-radius-pill);
+  color: var(--rtg-text-primary);
 }
 
 article.flash-warning {
   border-left: 4px solid var(--rtg-accent);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: var(--rtg-warning-bg);
+  background: var(--rtg-warning-dark);
   border-radius: var(--rtg-radius-pill);
+  color: var(--rtg-accent);
 }
 
 /* ---------- Log Output ---------- */
 
 pre#log-output {
-  background: #121e2b;
-  color: #e5e7eb;
+  background: var(--rtg-bg-deep);
+  color: var(--rtg-text-primary);
   padding: 1rem;
   border-radius: var(--rtg-radius-card);
   font-family: var(--rtg-font-mono);
   font-size: 13px;
-  border: 1px solid #374151;
+  border: 1px solid var(--rtg-border);
 }
 
 /* ---------- Tables ---------- */
+
+table {
+  border-color: var(--rtg-border);
+}
+
+table th {
+  color: var(--rtg-text-secondary);
+  border-color: var(--rtg-border);
+}
+
+table td {
+  border-color: var(--rtg-border);
+}
 
 table code {
   font-size: 0.85em;
