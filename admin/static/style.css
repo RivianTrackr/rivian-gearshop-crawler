@@ -60,12 +60,14 @@
 body {
   font-family: var(--rtg-font-primary);
   color: var(--rtg-text-primary);
+  background-color: var(--rtg-bg-light);
 }
 
 /* ---------- Navigation ---------- */
 
 nav {
   border-bottom: 1px solid var(--rtg-border);
+  background-color: var(--rtg-white);
 }
 
 nav .brand-name {
@@ -144,6 +146,7 @@ article {
   border-radius: var(--rtg-radius-card);
   border: 1px solid var(--rtg-border);
   box-shadow: var(--rtg-shadow-subtle);
+  background-color: var(--rtg-white);
 }
 
 /* ---------- Badges ---------- */
