@@ -1,7 +1,19 @@
+import re
 import subprocess
 from dataclasses import dataclass
 
 SUBPROCESS_TIMEOUT = 10
+
+# Matches timestamps like "Tue 2026-03-10 02:25:00 UTC"
+_TIMESTAMP_RE = re.compile(
+    r"[A-Z][a-z]{2}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\w+"
+)
+
+
+def _extract_timestamp(text: str) -> str | None:
+    """Extract a systemd-style timestamp from text."""
+    m = _TIMESTAMP_RE.search(text)
+    return m.group(0) if m else None
 
 
 @dataclass
@@ -36,50 +48,39 @@ def get_service_status(service_unit: str, timer_unit: str | None = None) -> Serv
     last_trigger = props.get("ExecMainStartTimestamp")
 
     if timer_unit:
-        # Query all timer-related properties to handle different systemd versions
-        timer_result = subprocess.run(
-            [
-                "systemctl", "show", timer_unit,
-                "--property=NextElapseUSecRealtime,NextElapseUSecMonotonic,"
-                "LastTriggerUSec,LastTriggerUSecRealtime",
-            ],
-            capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
-        )
-        timer_props = _parse_props(timer_result.stdout)
-
-        # Try multiple property names for next trigger
-        next_trigger = (
-            timer_props.get("NextElapseUSecRealtime")
-            or timer_props.get("NextElapseUSecMonotonic")
-        )
-
-        # Try multiple property names for last trigger
-        lt = (
-            timer_props.get("LastTriggerUSecRealtime")
-            or timer_props.get("LastTriggerUSec")
-        )
-        if lt and lt not in ("n/a", "0", ""):
-            last_trigger = lt
-
-        # Fallback: use systemctl list-timers to parse next/last run
-        if not next_trigger or next_trigger in ("n/a", "0", ""):
-            try:
-                lt_result = subprocess.run(
-                    ["systemctl", "list-timers", timer_unit, "--no-pager", "--plain"],
-                    capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
-                )
-                lines = lt_result.stdout.strip().splitlines()
-                # Header line then data line
-                if len(lines) >= 2:
-                    # Format: NEXT  LEFT  LAST  PASSED  UNIT  ACTIVATES
-                    parts = lines[1].split()
-                    if len(parts) >= 6:
-                        # NEXT is first 3 fields (day date time), LAST is fields after LEFT
-                        next_trigger = " ".join(parts[0:3])
-                        # Find LAST: skip NEXT(3) + LEFT(2) = index 5 for last
-                        last_trigger = " ".join(parts[5:8]) if len(parts) >= 9 else last_trigger
-            except Exception:
-                pass
+        # Use list-timers which gives clean, human-readable timestamps
+        # Format: NEXT  LEFT  LAST  PASSED  UNIT  ACTIVATES
+        try:
+            lt_result = subprocess.run(
+                ["systemctl", "list-timers", timer_unit, "--no-pager"],
+                capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+            )
+            output = lt_result.stdout.strip()
+            # Find the data line (skip header, look for the unit name)
+            for line in output.splitlines():
+                if timer_unit in line:
+                    # The line format is like:
+                    # Tue 2026-03-10 02:25:00 UTC  48min left  Tue 2026-03-10 01:14:21 UTC  22min ago  rivian-...timer  rivian-...service
+                    # Split on the unit name to get the timestamps portion
+                    before_unit = line.split(timer_unit)[0].strip()
+                    # Split on "left" to separate NEXT from LAST
+                    if " left " in before_unit:
+                        next_part, rest = before_unit.split(" left ", 1)
+                        # next_part ends with the LEFT duration, NEXT timestamp is before that
+                        # e.g. "Tue 2026-03-10 02:25:00 UTC  48min"
+                        # Find the timezone marker to split
+                        next_trigger = _extract_timestamp(next_part)
+                    if " ago " in before_unit:
+                        ago_idx = before_unit.rfind(" ago ")
+                        last_part = before_unit[:ago_idx]
+                        # last_part has NEXT...left...LAST_timestamp PASSED
+                        # The LAST timestamp is between "left" and "ago"
+                        if " left " in last_part:
+                            last_part = last_part.split(" left ", 1)[1].strip()
+                        last_trigger = _extract_timestamp(last_part)
+                    break
+        except Exception:
+            pass
 
     return ServiceStatus(
         active_state=props.get("ActiveState", "unknown"),
