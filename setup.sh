@@ -10,7 +10,7 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "==> Installing system dependencies..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip \
+apt-get install -y -qq python3 python3-venv python3-pip nginx \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
     libpango-1.0-0 libcairo2 libasound2 libxshmfence1 \
@@ -51,6 +51,14 @@ if ! grep -q "^ADMIN_SECRET_KEY=" "${INSTALL_DIR}/.env" 2>/dev/null; then
     echo "==> Generated ADMIN_SECRET_KEY"
 fi
 
+echo "==> Configuring nginx reverse proxy..."
+cp "${REPO_DIR}/nginx-riviancrawlr.conf" /etc/nginx/sites-available/riviancrawlr.com
+ln -sf /etc/nginx/sites-available/riviancrawlr.com /etc/nginx/sites-enabled/
+# Remove default site if it exists
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl restart nginx
+systemctl enable nginx
+
 systemctl daemon-reload
 systemctl enable rivian-gearshop-crawler.timer
 systemctl start rivian-gearshop-crawler.timer
@@ -64,7 +72,8 @@ echo "=========================================="
 echo ""
 echo "  Install dir:  ${INSTALL_DIR}"
 echo "  Timer:        every 60 minutes"
-echo "  Admin UI:     http://127.0.0.1:8111"
+echo "  Admin UI:     https://riviancrawlr.com (via Cloudflare)"
+echo "  Local:        http://127.0.0.1:8111"
 echo "  Config:       ${INSTALL_DIR}/.env"
 echo ""
 echo "  Useful commands:"
