@@ -36,24 +36,56 @@ def get_service_status(service_unit: str, timer_unit: str | None = None) -> Serv
     last_trigger = props.get("ExecMainStartTimestamp")
 
     if timer_unit:
+        # Query all timer-related properties to handle different systemd versions
         timer_result = subprocess.run(
             [
                 "systemctl", "show", timer_unit,
-                "--property=NextElapseUSecRealtime,LastTriggerUSec",
+                "--property=NextElapseUSecRealtime,NextElapseUSecMonotonic,"
+                "LastTriggerUSec,LastTriggerUSecRealtime",
             ],
             capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
         )
         timer_props = _parse_props(timer_result.stdout)
-        next_trigger = timer_props.get("NextElapseUSecRealtime")
-        lt = timer_props.get("LastTriggerUSec")
-        if lt and lt != "n/a":
+
+        # Try multiple property names for next trigger
+        next_trigger = (
+            timer_props.get("NextElapseUSecRealtime")
+            or timer_props.get("NextElapseUSecMonotonic")
+        )
+
+        # Try multiple property names for last trigger
+        lt = (
+            timer_props.get("LastTriggerUSecRealtime")
+            or timer_props.get("LastTriggerUSec")
+        )
+        if lt and lt not in ("n/a", "0", ""):
             last_trigger = lt
+
+        # Fallback: use systemctl list-timers to parse next/last run
+        if not next_trigger or next_trigger in ("n/a", "0", ""):
+            try:
+                lt_result = subprocess.run(
+                    ["systemctl", "list-timers", timer_unit, "--no-pager", "--plain"],
+                    capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+                )
+                lines = lt_result.stdout.strip().splitlines()
+                # Header line then data line
+                if len(lines) >= 2:
+                    # Format: NEXT  LEFT  LAST  PASSED  UNIT  ACTIVATES
+                    parts = lines[1].split()
+                    if len(parts) >= 6:
+                        # NEXT is first 3 fields (day date time), LAST is fields after LEFT
+                        next_trigger = " ".join(parts[0:3])
+                        # Find LAST: skip NEXT(3) + LEFT(2) = index 5 for last
+                        last_trigger = " ".join(parts[5:8]) if len(parts) >= 9 else last_trigger
+            except Exception:
+                pass
 
     return ServiceStatus(
         active_state=props.get("ActiveState", "unknown"),
         sub_state=props.get("SubState", "unknown"),
-        last_trigger=last_trigger if last_trigger and last_trigger != "n/a" else None,
-        next_trigger=next_trigger if next_trigger and next_trigger != "n/a" else None,
+        last_trigger=last_trigger if last_trigger and last_trigger not in ("n/a", "0", "") else None,
+        next_trigger=next_trigger if next_trigger and next_trigger not in ("n/a", "0", "") else None,
         result=props.get("Result"),
     )
 
