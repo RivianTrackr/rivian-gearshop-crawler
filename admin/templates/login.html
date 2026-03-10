@@ -3,19 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Login — Gearshop Admin</title>
+  <title>Login — RivianTrackr</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <div class="brand-gradient"></div>
   <main class="container" style="max-width: 400px; margin-top: 10vh;">
     <article>
       <header>
-        <h2>Gearshop Admin</h2>
+        <h2 class="brand-name">Rivian<span class="brand-accent">Trackr</span></h2>
       </header>
 
       {% if error %}
-      <p style="color: var(--pico-color-red-500);">{{ error }}</p>
+      <p style="color: var(--rtg-error);">{{ error }}</p>
       {% endif %}
 
       <form method="post" action="/login">

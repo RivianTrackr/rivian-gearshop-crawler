@@ -11,7 +11,7 @@ from admin.routes import auth_routes, dashboard, scripts, config_editor, data_vi
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = FastAPI(title="Gearshop Admin", docs_url=None, redoc_url=None)
+app = FastAPI(title="RivianTrackr Admin", docs_url=None, redoc_url=None)
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 

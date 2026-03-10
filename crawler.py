@@ -342,7 +342,7 @@ def send_email(subject, html):
         print(f"[ERROR] Brevo send failed: {resp.status_code} {resp.text}")
 
 def build_email_fixed(is_initial, diffs, new_products, removed_products, initial_rows=None):
-    title = "Rivian Gear Shop: Initial Catalog" if is_initial else "Rivian Gear Shop: Changes Detected"
+    title = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
     parts = [f"<h2>{title}</h2>"]
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     parts.append(f"<p><small>Generated {ts} UTC</small></p>")
@@ -788,7 +788,7 @@ def main():
             removed_products=removed_products_report_block,
             initial_rows=initial_rows_for_email
         )
-        subject = "Rivian Gear Shop: Initial Catalog" if is_initial else "Rivian Gear Shop: Changes Detected"
+        subject = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
         send_email(subject, html)
 
         # Remember newly reported removals to avoid re-emailing every run
@@ -802,7 +802,7 @@ def main():
         if should_send_heartbeat(conn):
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             html = f"""
-                <h2>Rivian Gear Shop: Daily Heartbeat</h2>
+                <h2>RivianTrackr: Daily Heartbeat</h2>
                 <p>No catalog changes detected in the last checks.</p>
                 <ul>
                   <li><b>Run time:</b> {ts}</li>
@@ -811,7 +811,7 @@ def main():
                 </ul>
                 <p style='color:#666'>Heartbeat is sent once per day at hour {HEARTBEAT_UTC_HOUR:02d}:00 UTC when there are no changes.</p>
             """
-            send_email("Rivian Gear Shop: Daily Heartbeat (No Changes)", html)
+            send_email("RivianTrackr: Daily Heartbeat (No Changes)", html)
             mark_heartbeat_sent(conn)
         else:
             log("No changes detected — not sending email (heartbeat either already sent today or outside heartbeat hour).")

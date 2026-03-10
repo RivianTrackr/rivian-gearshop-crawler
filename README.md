@@ -1,4 +1,4 @@
-# Rivian Gear Shop Crawler
+# RivianTrackr — Gear Shop Crawler
 
 Monitors [gearshop.rivian.com](https://gearshop.rivian.com) for inventory changes and sends email alerts when products are added, removed, or change price/availability.
 
