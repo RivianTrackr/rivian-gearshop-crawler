@@ -23,8 +23,8 @@
           {% endif %}
         </td>
       </tr>
-      <tr><td>Last Run</td><td>{{ status.last_trigger or 'Never' }}</td></tr>
-      <tr><td>Next Run</td><td>{{ status.next_trigger or 'N/A' }}</td></tr>
+      <tr><td>Last Run</td><td><span class="utc-time" data-utc="{{ status.last_trigger or '' }}">{{ status.last_trigger or 'Never' }}</span></td></tr>
+      <tr><td>Next Run</td><td><span class="utc-time" data-utc="{{ status.next_trigger or '' }}">{{ status.next_trigger or 'N/A' }}</span></td></tr>
       <tr><td>Timer</td><td>{{ 'Active' if timer_active else 'Stopped' }}</td></tr>
       {% if status.result and status.result != 'success' %}
       <tr><td>Result</td><td><mark class="error">{{ status.result }}</mark></td></tr>
@@ -64,7 +64,7 @@
       <thead><tr><th>Run Time</th><th>Products Found</th></tr></thead>
       <tbody>
         {% for row in crawl_stats %}
-        <tr><td>{{ row.run_at }}</td><td>{{ row.product_count }}</td></tr>
+        <tr><td><span class="utc-time" data-utc="{{ row.run_at }}">{{ row.run_at }}</span></td><td>{{ row.product_count }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

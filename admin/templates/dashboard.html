@@ -31,11 +31,11 @@
       </tr>
       <tr>
         <td><strong>Last Run</strong></td>
-        <td>{{ script.status.last_trigger or 'Never' }}</td>
+        <td><span class="utc-time" data-utc="{{ script.status.last_trigger or '' }}">{{ script.status.last_trigger or 'Never' }}</span></td>
       </tr>
       <tr>
         <td><strong>Next Run</strong></td>
-        <td>{{ script.status.next_trigger or 'N/A' }}</td>
+        <td><span class="utc-time" data-utc="{{ script.status.next_trigger or '' }}">{{ script.status.next_trigger or 'N/A' }}</span></td>
       </tr>
       <tr>
         <td><strong>Timer</strong></td>
