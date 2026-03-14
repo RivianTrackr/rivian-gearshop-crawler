@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import os
+
+from admin.auth import verify_csrf
 
 from admin.db import get_crawler_db
 from admin.systemd import (
@@ -55,7 +57,7 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
 
 
 @router.post("/scripts/{script_id}/start")
-def script_start(request: Request, script_id: int):
+def script_start(request: Request, script_id: int, _csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if script:
         start_service(script["service_unit"])
@@ -63,7 +65,7 @@ def script_start(request: Request, script_id: int):
 
 
 @router.post("/scripts/{script_id}/stop")
-def script_stop(request: Request, script_id: int):
+def script_stop(request: Request, script_id: int, _csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if script and script["timer_unit"]:
         stop_service(script["timer_unit"])
@@ -71,7 +73,7 @@ def script_stop(request: Request, script_id: int):
 
 
 @router.post("/scripts/{script_id}/restart")
-def script_restart(request: Request, script_id: int):
+def script_restart(request: Request, script_id: int, _csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if script:
         if script["timer_unit"]:
