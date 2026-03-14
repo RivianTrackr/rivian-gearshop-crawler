@@ -50,14 +50,31 @@ EMAIL_FROM      = ""
 EMAIL_TO        = []
 DISCORD_WEBHOOK_URL = ""
 
+# Discord settings (loaded from admin DB)
+DISCORD_CONFIG = {
+    "webhook_url": "",
+    "thread_id": "",
+    "username": "RivianTrackr",
+    "avatar_url": "",
+    "embed_color": "#FBA919",
+    "notify_new_products": True,
+    "notify_removed_products": True,
+    "notify_variant_changes": True,
+    "notify_heartbeat": True,
+    "mention_role_id": "",
+    "mention_user_id": "",
+    "mention_on_new": True,
+    "mention_on_removed": False,
+    "mention_on_changes": False,
+}
+
 def _load_notification_settings():
     """Load notification settings from admin DB, falling back to env vars."""
-    global BREVO_API_KEY, EMAIL_FROM, EMAIL_TO, DISCORD_WEBHOOK_URL
+    global BREVO_API_KEY, EMAIL_FROM, EMAIL_TO, DISCORD_WEBHOOK_URL, DISCORD_CONFIG
 
     # Try admin DB first
     if os.path.exists(ADMIN_DB_PATH):
         try:
-            import sqlite3
             conn = sqlite3.connect(f"file:{ADMIN_DB_PATH}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
 
@@ -81,6 +98,10 @@ def _load_notification_settings():
                         logger.info("Loaded email notification settings from admin DB")
                     elif row["channel"] == "discord" and row["enabled"]:
                         DISCORD_WEBHOOK_URL = cfg.get("webhook_url", "")
+                        # Merge DB config over defaults
+                        for key in DISCORD_CONFIG:
+                            if key in cfg:
+                                DISCORD_CONFIG[key] = cfg[key]
                         logger.info("Loaded Discord notification settings from admin DB")
             conn.close()
         except Exception as e:
@@ -468,14 +489,41 @@ def build_email_fixed(is_initial, diffs, new_products, removed_products, initial
 
 # ---------------------- Discord ----------------------
 
+def _discord_hex_color(hex_str: str) -> int:
+    """Convert '#FBA919' hex string to integer for Discord embed color."""
+    try:
+        return int(hex_str.strip().lstrip("#"), 16)
+    except (ValueError, TypeError):
+        return 0xFBA919
+
+
+def _discord_mention(event: str) -> str:
+    """Build mention string for the given event type ('new', 'removed', 'changes')."""
+    cfg = DISCORD_CONFIG
+    if not cfg.get(f"mention_on_{event}", False):
+        return ""
+    parts = []
+    if cfg.get("mention_role_id"):
+        parts.append(f"<@&{cfg['mention_role_id']}>")
+    if cfg.get("mention_user_id"):
+        parts.append(f"<@{cfg['mention_user_id']}>")
+    return " ".join(parts)
+
+
 def send_discord(subject, diffs=None, new_products=None, removed_products=None, is_heartbeat=False, heartbeat_info=None):
     """Send a notification to Discord via webhook. Formats data as embeds."""
     if not DISCORD_WEBHOOK_URL:
         return
 
+    cfg = DISCORD_CONFIG
+    accent_color = _discord_hex_color(cfg.get("embed_color", "#FBA919"))
+
     embeds = []
+    mentions = []
 
     if is_heartbeat and heartbeat_info:
+        if not cfg.get("notify_heartbeat", True):
+            return
         embeds.append({
             "title": subject,
             "description": (
@@ -488,7 +536,7 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
         })
     else:
         # New products
-        if new_products:
+        if new_products and cfg.get("notify_new_products", True):
             lines = []
             for p in new_products[:10]:
                 url = p.get("url", "")
@@ -505,9 +553,12 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
                 "description": "\n".join(lines),
                 "color": 0x34C759,  # green
             })
+            mention = _discord_mention("new")
+            if mention:
+                mentions.append(mention)
 
         # Removed products
-        if removed_products:
+        if removed_products and cfg.get("notify_removed_products", True):
             lines = []
             for p in removed_products[:10]:
                 lines.append(f"{p.get('title', p.get('handle', 'Unknown'))}")
@@ -518,9 +569,12 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
                 "description": "\n".join(lines),
                 "color": 0xFF3B30,  # red
             })
+            mention = _discord_mention("removed")
+            if mention:
+                mentions.append(mention)
 
         # Variant changes
-        if diffs:
+        if diffs and cfg.get("notify_variant_changes", True):
             lines = []
             for row in diffs[:15]:
                 product = row.get("product_title", "")
@@ -535,20 +589,35 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
             embeds.append({
                 "title": f"Variant Changes ({len(diffs)})",
                 "description": "\n".join(lines),
-                "color": 0xFBA919,  # gold
+                "color": accent_color,
             })
+            mention = _discord_mention("changes")
+            if mention:
+                mentions.append(mention)
 
     if not embeds:
         return
 
     # Discord limits: max 10 embeds, 6000 total chars
     payload = {
-        "username": "RivianTrackr",
+        "username": cfg.get("username") or "RivianTrackr",
         "embeds": embeds[:10],
     }
 
+    if cfg.get("avatar_url"):
+        payload["avatar_url"] = cfg["avatar_url"]
+
+    # Add mentions as content text (deduplicated)
+    if mentions:
+        payload["content"] = " ".join(dict.fromkeys(mentions))
+
+    # Thread support
+    url = DISCORD_WEBHOOK_URL
+    if cfg.get("thread_id"):
+        url += f"?thread_id={cfg['thread_id']}"
+
     try:
-        resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
+        resp = requests.post(url, json=payload, timeout=15)
         if resp.status_code >= 300:
             logger.error("Discord webhook failed: %d %s", resp.status_code, resp.text[:200])
         else:

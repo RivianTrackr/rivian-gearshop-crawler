@@ -20,6 +20,29 @@ templates = Jinja2Templates(
 )
 
 
+def _parse_hex_color(hex_str: str) -> int:
+    """Convert '#FBA919' to decimal integer for Discord embed color."""
+    hex_str = hex_str.strip().lstrip("#")
+    try:
+        return int(hex_str, 16)
+    except (ValueError, TypeError):
+        return 0xFBA919  # default gold
+
+
+def _build_mention_string(cfg: dict, event: str) -> str:
+    """Build a Discord mention string based on config and event type.
+    event is one of: 'new', 'removed', 'changes'."""
+    parts = []
+    trigger_key = f"mention_on_{event}"
+    if not cfg.get(trigger_key, False):
+        return ""
+    if cfg.get("mention_role_id"):
+        parts.append(f"<@&{cfg['mention_role_id']}>")
+    if cfg.get("mention_user_id"):
+        parts.append(f"<@{cfg['mention_user_id']}>")
+    return " ".join(parts)
+
+
 def _get_notification(script_id: int, channel: str) -> dict | None:
     conn = get_admin_db()
     try:
@@ -104,16 +127,15 @@ def update_email_settings(request: Request, script_id: int,
 
 
 @router.post("/scripts/{script_id}/notifications/discord", response_class=HTMLResponse)
-def update_discord_settings(request: Request, script_id: int,
-                            discord_enabled: str = Form(""),
-                            discord_webhook_url: str = Form(""),
-                            csrf: str = Depends(verify_csrf)):
+async def update_discord_settings(request: Request, script_id: int,
+                                  csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if not script:
         return RedirectResponse("/", status_code=303)
 
-    enabled = discord_enabled == "on"
-    webhook = discord_webhook_url.strip()
+    form = await request.form()
+    enabled = form.get("discord_enabled") == "on"
+    webhook = (form.get("discord_webhook_url") or "").strip()
 
     if enabled and not webhook:
         return _notif_response(request, script_id, flash="Discord webhook URL is required when enabled.", flash_type="error")
@@ -125,7 +147,35 @@ def update_discord_settings(request: Request, script_id: int,
             flash_type="error",
         )
 
-    config = {"webhook_url": webhook}
+    # Validate thread ID is numeric if provided
+    thread_id = (form.get("discord_thread_id") or "").strip()
+    if thread_id and not thread_id.isdigit():
+        return _notif_response(request, script_id, flash="Thread ID must be a numeric Discord snowflake.", flash_type="error")
+
+    # Validate mention IDs are numeric if provided
+    mention_role_id = (form.get("discord_mention_role_id") or "").strip()
+    mention_user_id = (form.get("discord_mention_user_id") or "").strip()
+    if mention_role_id and not mention_role_id.isdigit():
+        return _notif_response(request, script_id, flash="Mention Role ID must be a numeric Discord snowflake.", flash_type="error")
+    if mention_user_id and not mention_user_id.isdigit():
+        return _notif_response(request, script_id, flash="Mention User ID must be a numeric Discord snowflake.", flash_type="error")
+
+    config = {
+        "webhook_url": webhook,
+        "thread_id": thread_id,
+        "username": (form.get("discord_username") or "").strip(),
+        "avatar_url": (form.get("discord_avatar_url") or "").strip(),
+        "embed_color": (form.get("discord_embed_color") or "#FBA919").strip(),
+        "notify_new_products": form.get("notify_new_products") == "on",
+        "notify_removed_products": form.get("notify_removed_products") == "on",
+        "notify_variant_changes": form.get("notify_variant_changes") == "on",
+        "notify_heartbeat": form.get("notify_heartbeat") == "on",
+        "mention_role_id": mention_role_id,
+        "mention_user_id": mention_user_id,
+        "mention_on_new": form.get("mention_on_new") == "on",
+        "mention_on_removed": form.get("mention_on_removed") == "on",
+        "mention_on_changes": form.get("mention_on_changes") == "on",
+    }
     _upsert_notification(script_id, "discord", enabled, config)
     return _notif_response(request, script_id, flash="Discord notification settings saved.", flash_type="success")
 
@@ -197,25 +247,42 @@ def test_discord(request: Request, script_id: int, csrf: str = Depends(verify_cs
     if not notif or not notif["enabled"]:
         return _notif_response(request, script_id, flash="Discord notifications are not enabled for this script.", flash_type="error")
 
-    webhook_url = notif["config"].get("webhook_url", "")
+    cfg = notif["config"]
+    webhook_url = cfg.get("webhook_url", "")
     if not webhook_url:
         return _notif_response(request, script_id, flash="Discord webhook URL is not configured.", flash_type="error")
 
+    # Parse embed color from hex string
+    embed_color = _parse_hex_color(cfg.get("embed_color", "#FBA919"))
+
     payload = {
-        "username": "RivianTrackr",
+        "username": cfg.get("username") or "RivianTrackr",
         "embeds": [{
-            "title": f"RivianTrackr: Test Notification",
+            "title": "RivianTrackr: Test Notification",
             "description": (
                 f"This is a test notification from your RivianTrackr admin panel.\n"
                 f"**Script:** {script['display_name']}\n"
                 "If you're reading this, your Discord webhook is working correctly."
             ),
-            "color": 0xFBA919,
+            "color": embed_color,
         }],
     }
 
+    if cfg.get("avatar_url"):
+        payload["avatar_url"] = cfg["avatar_url"]
+
+    # Build mention string
+    mention = _build_mention_string(cfg, event="new")
+    if mention:
+        payload["content"] = mention
+
+    # Thread support
+    url = webhook_url
+    if cfg.get("thread_id"):
+        url += f"?thread_id={cfg['thread_id']}"
+
     try:
-        resp = http_requests.post(webhook_url, json=payload, timeout=15)
+        resp = http_requests.post(url, json=payload, timeout=15)
         if resp.status_code < 300:
             return _notif_response(request, script_id, flash="Test notification sent to Discord.", flash_type="success")
         else:
