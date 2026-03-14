@@ -20,7 +20,7 @@ from playwright.sync_api import sync_playwright
 from pathlib import Path
 
 # Availability fallbacks (external helper you already have)
-from availability import infer_availability_from_html, get_avail_html_checks
+from availability import infer_availability_from_html, get_avail_html_checks, reset_avail_state
 
 # ---------------------- Config & Logging ----------------------
 
@@ -42,6 +42,7 @@ MAX_SCROLL_SECONDS = int(os.getenv("MAX_SCROLL_SECONDS", "120"))   # stop scroll
 PRODUCT_DELAY      = float(os.getenv("PRODUCT_DELAY", "0.2"))      # pause between product JSON hits
 AVAIL_HTML_MAX     = int(os.getenv("AVAIL_HTML_MAX", "200"))       # 0 = unlimited HTML fallbacks
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))    # -1 = disabled
+SNAPSHOT_RETENTION = 30  # keep latest N snapshots per variant
 
 HEADERS = {
     "User-Agent": "RivianGearshopCrawler/1.0 (+https://riviantrackr.com)"
@@ -471,6 +472,7 @@ def confirm_product_removed(handle, timeout=15):
 
 def main():
     init_db()
+    reset_avail_state()
     crawled_at = now_utc_iso()
 
     # --- Collect product links with lazy-load + one retry if suspiciously low
@@ -746,8 +748,8 @@ def main():
 
         removed_products_report_block = confirmed_removed
 
-        # --- Prune old snapshots: keep only the latest 30 per variant ---
-        conn.execute("""
+        # --- Prune old snapshots: keep only the latest N per variant ---
+        conn.execute(f"""
             DELETE FROM snapshots
             WHERE snapshot_id NOT IN (
                 SELECT snapshot_id FROM (
@@ -755,7 +757,7 @@ def main():
                            ROW_NUMBER() OVER (PARTITION BY variant_id ORDER BY snapshot_id DESC) AS rn
                     FROM snapshots
                 ) sub
-                WHERE sub.rn <= 30
+                WHERE sub.rn <= {SNAPSHOT_RETENTION}
             )
         """)
         pruned = conn.execute("SELECT changes()").fetchone()[0]

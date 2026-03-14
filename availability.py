@@ -66,3 +66,9 @@ def infer_availability_from_html(handle, variant_id, site_root, headers, log=lam
 
 def get_avail_html_checks():
     return _avail_html_checks
+
+def reset_avail_state():
+    """Reset cache and counter between crawler runs."""
+    global _avail_cache, _avail_html_checks
+    _avail_cache = {}
+    _avail_html_checks = 0

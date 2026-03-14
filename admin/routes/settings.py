@@ -1,4 +1,5 @@
 import os
+import re
 
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,13 +13,29 @@ templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
 )
 
+# Basic email pattern: local@domain.tld
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_email_list(email_str: str) -> str | None:
+    """Validate a comma-separated list of emails. Returns error message or None."""
+    emails = [e.strip() for e in email_str.split(",") if e.strip()]
+    if not emails:
+        return "At least one email address is required."
+    for addr in emails:
+        if not _EMAIL_RE.match(addr):
+            return f"Invalid email address: {addr}"
+    return None
+
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
     # Load email recipients from the first managed script's .env
     conn = get_admin_db()
-    script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
-    conn.close()
+    try:
+        script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
+    finally:
+        conn.close()
 
     email_to = ""
     if script and script["env_file_path"] and os.path.exists(script["env_file_path"]):
@@ -51,25 +68,33 @@ def change_password(request: Request,
         return _settings_response(request, flash="Password must be at least 8 characters.", flash_type="error")
 
     conn = get_admin_db()
-    user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
+    try:
+        user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)).fetchone()
 
-    if not user or not verify_password(current_password, user["password_hash"]):
+        if not user or not verify_password(current_password, user["password_hash"]):
+            return _settings_response(request, flash="Current password is incorrect.", flash_type="error")
+
+        new_hash = hash_password(new_password)
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        conn.commit()
+    finally:
         conn.close()
-        return _settings_response(request, flash="Current password is incorrect.", flash_type="error")
-
-    new_hash = hash_password(new_password)
-    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
-    conn.commit()
-    conn.close()
 
     return _settings_response(request, flash="Password changed successfully.", flash_type="success")
 
 
 @router.post("/settings/emails", response_class=HTMLResponse)
 def update_emails(request: Request, email_to: str = Form(...)):
+    # Validate email addresses
+    error = _validate_email_list(email_to)
+    if error:
+        return _settings_response(request, email_to=email_to, flash=error, flash_type="error")
+
     conn = get_admin_db()
-    script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
-    conn.close()
+    try:
+        script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
+    finally:
+        conn.close()
 
     if not script or not script["env_file_path"]:
         return _settings_response(request, flash="No script configured.", flash_type="error")
@@ -108,8 +133,10 @@ def _settings_response(request: Request, flash: str = None, flash_type: str = "i
                        email_to: str = None):
     if email_to is None:
         conn = get_admin_db()
-        script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
-        conn.close()
+        try:
+            script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
+        finally:
+            conn.close()
         email_to = ""
         if script and script["env_file_path"] and os.path.exists(script["env_file_path"]):
             with open(script["env_file_path"], "r") as f:
