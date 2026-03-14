@@ -2,11 +2,12 @@ import os
 import shutil
 import tempfile
 
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS, KNOWN_ENV_KEYS
+from admin.auth import verify_csrf
 from admin.routes.helpers import get_script as _get_script
 
 router = APIRouter()
@@ -156,6 +157,12 @@ async def config_save(request: Request, script_id: int):
 
     env_path = script["env_file_path"]
     form = await request.form()
+
+    # Validate CSRF token
+    csrf_token = form.get("_csrf", "")
+    expected = getattr(request.state, "csrf_token", None)
+    if not expected or csrf_token != expected:
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
 
     # Collect all key-value pairs from form
     keys = form.getlist("key")

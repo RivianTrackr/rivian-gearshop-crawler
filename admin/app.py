@@ -25,7 +25,9 @@ def startup():
     init_admin_db()
 
 
-class AuthCSRFMiddleware(BaseHTTPMiddleware):
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Handles authentication and session refresh only. No form body reading."""
+
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
@@ -53,19 +55,9 @@ class AuthCSRFMiddleware(BaseHTTPMiddleware):
             response.delete_cookie(COOKIE_NAME)
             return response
 
-        # Store session and CSRF token in request state
+        # Store session and CSRF token in request state for routes to use
         request.state.session = session
         request.state.csrf_token = get_csrf_token(token)
-
-        # CSRF check on POST requests
-        # Read the raw body and cache it so downstream handlers can re-read it
-        if request.method == "POST":
-            body = await request.body()
-            # Parse form from the cached body
-            form = await request.form()
-            submitted_csrf = form.get("_csrf", "")
-            if submitted_csrf != request.state.csrf_token:
-                return RedirectResponse(path, status_code=303)
 
         response = await call_next(request)
 
@@ -79,7 +71,7 @@ class AuthCSRFMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app.add_middleware(AuthCSRFMiddleware)
+app.add_middleware(AuthMiddleware)
 
 # Register routers
 app.include_router(auth_routes.router)

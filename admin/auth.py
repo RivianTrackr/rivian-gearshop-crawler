@@ -4,7 +4,7 @@ import hashlib
 
 import bcrypt as _bcrypt
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, Form
 from fastapi.responses import RedirectResponse
 
 from admin.config import SECRET_KEY, SESSION_MAX_AGE
@@ -56,3 +56,12 @@ def require_auth_dependency(request: Request) -> dict:
     if not token:
         return None
     return validate_session_token(token)
+
+
+def verify_csrf(request: Request, _csrf: str = Form("")) -> str:
+    """FastAPI dependency that validates the CSRF token from form data.
+    Must be included as a parameter in every POST route handler."""
+    expected = getattr(request.state, "csrf_token", None)
+    if not expected or _csrf != expected:
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+    return _csrf

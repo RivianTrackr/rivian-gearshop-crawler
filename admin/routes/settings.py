@@ -4,12 +4,12 @@ import json
 import logging
 
 import requests as http_requests
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from admin.db import get_admin_db
-from admin.auth import verify_password, hash_password
+from admin.auth import verify_password, hash_password, verify_csrf
 
 logger = logging.getLogger("admin.settings")
 
@@ -101,7 +101,8 @@ def settings_page(request: Request):
 def change_password(request: Request,
                     current_password: str = Form(...),
                     new_password: str = Form(...),
-                    confirm_password: str = Form(...)):
+                    confirm_password: str = Form(...),
+                    _csrf: str = Depends(verify_csrf)):
     user_id = request.state.session["uid"]
 
     if new_password != confirm_password:
@@ -127,7 +128,7 @@ def change_password(request: Request,
 
 
 @router.post("/settings/emails", response_class=HTMLResponse)
-def update_emails(request: Request, email_to: str = Form(...)):
+def update_emails(request: Request, email_to: str = Form(...), _csrf: str = Depends(verify_csrf)):
     error = _validate_email_list(email_to)
     if error:
         return _settings_response(request, email_to=email_to, flash=error, flash_type="error")
@@ -142,7 +143,7 @@ def update_emails(request: Request, email_to: str = Form(...)):
 
 
 @router.post("/settings/test-email", response_class=HTMLResponse)
-def send_test_email(request: Request):
+def send_test_email(request: Request, _csrf: str = Depends(verify_csrf)):
     """Send a test email using the configured Brevo API key and recipients."""
     env_path = _get_env_path()
     if not env_path:
@@ -214,7 +215,7 @@ def send_test_email(request: Request):
 
 
 @router.post("/settings/discord", response_class=HTMLResponse)
-def update_discord(request: Request, discord_webhook: str = Form("")):
+def update_discord(request: Request, discord_webhook: str = Form(""), _csrf: str = Depends(verify_csrf)):
     env_path = _get_env_path()
     if not env_path:
         return _settings_response(request, flash="No script configured.", flash_type="error")
@@ -236,7 +237,7 @@ def update_discord(request: Request, discord_webhook: str = Form("")):
 
 
 @router.post("/settings/test-discord", response_class=HTMLResponse)
-def send_test_discord(request: Request):
+def send_test_discord(request: Request, _csrf: str = Depends(verify_csrf)):
     """Send a test notification to Discord."""
     env_path = _get_env_path()
     if not env_path:
