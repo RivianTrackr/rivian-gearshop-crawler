@@ -3,11 +3,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import os
 
-from admin.db import get_admin_db, get_crawler_db
+from admin.db import get_crawler_db
 from admin.systemd import (
     get_service_status, get_timer_active,
     start_service, stop_service, get_journal_logs,
 )
+from admin.routes.helpers import get_script as _get_script
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -15,15 +16,6 @@ templates = Jinja2Templates(
 )
 
 CRAWL_STATS_LIMIT = 50
-
-
-def _get_script(script_id: int):
-    conn = get_admin_db()
-    try:
-        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
-        return row
-    finally:
-        conn.close()
 
 
 @router.get("/scripts/{script_id}", response_class=HTMLResponse)

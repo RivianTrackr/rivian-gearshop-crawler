@@ -8,10 +8,29 @@ load_dotenv()
 SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
-    print(
-        "[WARN] ADMIN_SECRET_KEY not set in .env — using a random key. "
-        "Sessions will not survive restarts. Add ADMIN_SECRET_KEY to your .env file."
-    )
+    # Attempt to persist the key to .env so sessions survive restarts
+    env_path = os.path.join(os.getcwd(), ".env")
+    try:
+        lines = []
+        found = False
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    if line.strip().startswith("ADMIN_SECRET_KEY=") or line.strip().startswith("#ADMIN_SECRET_KEY="):
+                        lines.append(f"ADMIN_SECRET_KEY={SECRET_KEY}\n")
+                        found = True
+                    else:
+                        lines.append(line)
+        if not found:
+            lines.append(f"ADMIN_SECRET_KEY={SECRET_KEY}\n")
+        with open(env_path, "w") as f:
+            f.writelines(lines)
+        print(f"[INFO] Generated ADMIN_SECRET_KEY and saved to {env_path}")
+    except OSError:
+        print(
+            "[WARN] ADMIN_SECRET_KEY not set in .env — using a random key. "
+            "Sessions will not survive restarts. Add ADMIN_SECRET_KEY to your .env file."
+        )
 
 ADMIN_PORT = int(os.getenv("ADMIN_PORT", "8111"))
 ADMIN_DB_PATH = os.getenv("ADMIN_DB_PATH", os.path.join(os.getcwd(), "admin.db"))
