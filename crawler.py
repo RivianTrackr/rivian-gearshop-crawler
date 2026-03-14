@@ -40,12 +40,63 @@ def log(msg: str):
 SITE_ROOT       = (os.getenv("SITE_ROOT", "https://gearshop.rivian.com")).rstrip("/")
 COLLECTION_URL  = os.getenv("COLLECTION_URL", f"{SITE_ROOT}/collections/all")
 DB_PATH         = os.getenv("DB_PATH", "/opt/rivian-gearshop-crawler/gearshop.db")
-BREVO_API_KEY   = os.getenv("BREVO_API_KEY", "")
-EMAIL_FROM      = os.getenv("EMAIL_FROM", "RivianTrackr Alerts <alerts@example.com>")
-EMAIL_TO        = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
 
-# Discord
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+# Notification settings — loaded from admin DB if available, else fall back to env vars
+ADMIN_DB_PATH   = os.getenv("ADMIN_DB_PATH", os.path.join(os.getcwd(), "admin.db"))
+SCRIPT_NAME     = os.getenv("SCRIPT_NAME", "rivian-gearshop-crawler")
+
+BREVO_API_KEY   = ""
+EMAIL_FROM      = ""
+EMAIL_TO        = []
+DISCORD_WEBHOOK_URL = ""
+
+def _load_notification_settings():
+    """Load notification settings from admin DB, falling back to env vars."""
+    global BREVO_API_KEY, EMAIL_FROM, EMAIL_TO, DISCORD_WEBHOOK_URL
+
+    # Try admin DB first
+    if os.path.exists(ADMIN_DB_PATH):
+        try:
+            import sqlite3
+            conn = sqlite3.connect(f"file:{ADMIN_DB_PATH}?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+
+            # Find script ID by name
+            script = conn.execute(
+                "SELECT id FROM managed_scripts WHERE name = ?", (SCRIPT_NAME,)
+            ).fetchone()
+
+            if script:
+                sid = script["id"]
+                rows = conn.execute(
+                    "SELECT channel, enabled, config FROM script_notifications WHERE script_id = ?",
+                    (sid,),
+                ).fetchall()
+                for row in rows:
+                    cfg = json.loads(row["config"])
+                    if row["channel"] == "email" and row["enabled"]:
+                        BREVO_API_KEY = cfg.get("brevo_api_key", "")
+                        EMAIL_FROM = cfg.get("email_from", "")
+                        EMAIL_TO = [e.strip() for e in cfg.get("email_to", "").split(",") if e.strip()]
+                        logger.info("Loaded email notification settings from admin DB")
+                    elif row["channel"] == "discord" and row["enabled"]:
+                        DISCORD_WEBHOOK_URL = cfg.get("webhook_url", "")
+                        logger.info("Loaded Discord notification settings from admin DB")
+            conn.close()
+        except Exception as e:
+            logger.warning("Could not load notification settings from admin DB: %s", e)
+
+    # Fall back to env vars for anything not set from DB
+    if not BREVO_API_KEY:
+        BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    if not EMAIL_FROM:
+        EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianTrackr Alerts <alerts@example.com>")
+    if not EMAIL_TO:
+        EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
+    if not DISCORD_WEBHOOK_URL:
+        DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+
+_load_notification_settings()
 
 # Tuning
 MAX_SCROLL_SECONDS = int(os.getenv("MAX_SCROLL_SECONDS", "120"))   # stop scroll after N sec
