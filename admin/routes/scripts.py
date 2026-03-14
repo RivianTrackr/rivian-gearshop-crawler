@@ -57,7 +57,7 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
 
 
 @router.post("/scripts/{script_id}/start")
-def script_start(request: Request, script_id: int, _csrf: str = Depends(verify_csrf)):
+def script_start(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if script:
         start_service(script["service_unit"])
@@ -65,7 +65,7 @@ def script_start(request: Request, script_id: int, _csrf: str = Depends(verify_c
 
 
 @router.post("/scripts/{script_id}/stop")
-def script_stop(request: Request, script_id: int, _csrf: str = Depends(verify_csrf)):
+def script_stop(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if script and script["timer_unit"]:
         stop_service(script["timer_unit"])
@@ -73,7 +73,7 @@ def script_stop(request: Request, script_id: int, _csrf: str = Depends(verify_cs
 
 
 @router.post("/scripts/{script_id}/restart")
-def script_restart(request: Request, script_id: int, _csrf: str = Depends(verify_csrf)):
+def script_restart(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
     script = _get_script(script_id)
     if script:
         if script["timer_unit"]:
