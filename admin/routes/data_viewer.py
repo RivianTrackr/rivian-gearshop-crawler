@@ -1,8 +1,11 @@
 import os
+import io
+import csv
+import json
 import math
 
 from fastapi import APIRouter, Request, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from admin.db import get_crawler_db
@@ -15,6 +18,80 @@ templates = Jinja2Templates(
 
 PAGE_SIZE = 50
 VARIANT_HISTORY_LIMIT = 100
+
+# SQL for full product+variant+latest snapshot export
+_EXPORT_SQL = """
+SELECT
+  p.product_id, p.handle, p.title AS product_title, p.vendor, p.product_type, p.url,
+  v.variant_id, v.title AS variant_title, v.sku,
+  s.price_cents, s.compare_at_cents, s.available, s.crawled_at AS last_seen
+FROM variants v
+JOIN products p ON p.product_id = v.product_id
+LEFT JOIN snapshots s ON s.variant_id = v.variant_id
+  AND s.crawled_at = (SELECT MAX(s2.crawled_at) FROM snapshots s2 WHERE s2.variant_id = v.variant_id)
+ORDER BY p.title, v.title
+"""
+
+
+def _export_rows(db_path: str) -> list[dict]:
+    """Fetch all products+variants with latest snapshot as dicts."""
+    cdb = get_crawler_db(db_path)
+    try:
+        rows = cdb.execute(_EXPORT_SQL).fetchall()
+        return [
+            {
+                "product_id": r["product_id"],
+                "handle": r["handle"],
+                "product_title": r["product_title"],
+                "vendor": r["vendor"],
+                "product_type": r["product_type"],
+                "url": r["url"],
+                "variant_id": r["variant_id"],
+                "variant_title": r["variant_title"],
+                "sku": r["sku"],
+                "price": round(r["price_cents"] / 100, 2) if r["price_cents"] is not None else None,
+                "compare_at_price": round(r["compare_at_cents"] / 100, 2) if r["compare_at_cents"] is not None else None,
+                "available": bool(r["available"]) if r["available"] is not None else None,
+                "last_seen": r["last_seen"],
+            }
+            for r in rows
+        ]
+    finally:
+        cdb.close()
+
+
+@router.get("/data/{script_id}/export.json")
+def export_json(script_id: int):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    rows = _export_rows(script["db_path"])
+    content = json.dumps({"count": len(rows), "items": rows}, indent=2, ensure_ascii=False)
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="gearshop-export.json"'},
+    )
+
+
+@router.get("/data/{script_id}/export.csv")
+def export_csv(script_id: int):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    rows = _export_rows(script["db_path"])
+    output = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="gearshop-export.csv"'},
+    )
 
 
 @router.get("/data/{script_id}/products", response_class=HTMLResponse)
@@ -137,11 +214,21 @@ def variant_history(request: Request, script_id: int, variant_id: int):
     finally:
         cdb.close()
 
+    # Prepare chart data (chronological order for charts)
+    chart_data = []
+    for s in reversed(snapshots):
+        chart_data.append({
+            "date": s["crawled_at"],
+            "price": round(s["price_cents"] / 100, 2) if s["price_cents"] is not None else None,
+            "available": bool(s["available"]) if s["available"] is not None else None,
+        })
+
     return templates.TemplateResponse("data_snapshots.html", {
         "request": request,
         "script": script,
         "variant_id": variant_id,
         "snapshots": snapshots,
+        "chart_data_json": json.dumps(chart_data),
         "csrf_token": request.state.csrf_token,
     })
 

@@ -36,4 +36,13 @@
     <button type="submit">Update Recipients</button>
   </form>
 </article>
+
+<article>
+  <header><strong>Test Email</strong></header>
+  <p>Send a test email to verify your Brevo API key and recipient configuration.</p>
+  <form method="post" action="/settings/test-email">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button type="submit" class="outline">Send Test Email</button>
+  </form>
+</article>
 {% endblock %}
