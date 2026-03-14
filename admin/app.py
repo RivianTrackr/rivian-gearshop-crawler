@@ -28,8 +28,17 @@ def startup():
 async def auth_and_csrf_middleware(request: Request, call_next):
     # Skip auth for login page and static files
     path = request.url.path
-    if path.startswith("/static/") or path == "/login" or path == "/favicon.ico":
+    if path.startswith("/static/") or path in ("/login", "/favicon.ico"):
         return await call_next(request)
+
+    # Logout needs auth check but no CSRF (just deletes cookie)
+    if path == "/logout" and request.method == "POST":
+        token = request.cookies.get(COOKIE_NAME)
+        if token and validate_session_token(token):
+            response = RedirectResponse("/login", status_code=303)
+            response.delete_cookie(COOKIE_NAME)
+            return response
+        return RedirectResponse("/login", status_code=303)
 
     # Check authentication
     token = request.cookies.get(COOKIE_NAME)
