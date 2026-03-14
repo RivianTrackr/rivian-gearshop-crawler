@@ -14,12 +14,16 @@ templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
 )
 
+CRAWL_STATS_LIMIT = 50
+
 
 def _get_script(script_id: int):
     conn = get_admin_db()
-    row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
-    conn.close()
-    return row
+    try:
+        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
+        return row
+    finally:
+        conn.close()
 
 
 @router.get("/scripts/{script_id}", response_class=HTMLResponse)
@@ -35,14 +39,16 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
     # Get crawl stats if DB exists
     crawl_stats = []
     if script["db_path"] and os.path.exists(script["db_path"]):
+        cdb = get_crawler_db(script["db_path"])
         try:
-            cdb = get_crawler_db(script["db_path"])
             crawl_stats = cdb.execute(
-                "SELECT run_at, product_count FROM crawl_stats ORDER BY run_at DESC LIMIT 50"
+                "SELECT run_at, product_count FROM crawl_stats ORDER BY run_at DESC LIMIT ?",
+                (CRAWL_STATS_LIMIT,)
             ).fetchall()
-            cdb.close()
         except Exception:
             pass
+        finally:
+            cdb.close()
 
     return templates.TemplateResponse("script_detail.html", {
         "request": request,

@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from admin.db import get_admin_db
-from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS
+from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS, KNOWN_ENV_KEYS
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -121,9 +121,11 @@ def _write_env_file(path: str, keys: list[str], values: list[str]):
 
 def _get_script(script_id: int):
     conn = get_admin_db()
-    row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
-    conn.close()
-    return row
+    try:
+        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
+        return row
+    finally:
+        conn.close()
 
 
 @router.get("/scripts/{script_id}/config", response_class=HTMLResponse)
@@ -156,6 +158,19 @@ async def config_save(request: Request, script_id: int):
     # Collect all key-value pairs from form
     keys = form.getlist("key")
     values = form.getlist("value")
+
+    # Validate keys against allowlist
+    unknown_keys = [k for k in keys if k not in KNOWN_ENV_KEYS]
+    if unknown_keys:
+        entries = _parse_env_file(env_path)
+        return templates.TemplateResponse("config_editor.html", {
+            "request": request,
+            "script": script,
+            "entries": entries,
+            "csrf_token": request.state.csrf_token,
+            "flash_message": f"Unknown config key(s): {', '.join(unknown_keys)}. Save aborted.",
+            "flash_type": "error",
+        })
 
     # Backup before writing
     if os.path.exists(env_path):

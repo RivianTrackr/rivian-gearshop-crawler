@@ -13,13 +13,16 @@ templates = Jinja2Templates(
 )
 
 PAGE_SIZE = 50
+VARIANT_HISTORY_LIMIT = 100
 
 
 def _get_script(script_id: int):
     conn = get_admin_db()
-    row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
-    conn.close()
-    return row
+    try:
+        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
+        return row
+    finally:
+        conn.close()
 
 
 @router.get("/data/{script_id}/products", response_class=HTMLResponse)
@@ -31,43 +34,43 @@ def products_list(request: Request, script_id: int,
         return RedirectResponse("/", status_code=303)
 
     cdb = get_crawler_db(script["db_path"])
+    try:
+        # Count total
+        if q:
+            count_row = cdb.execute(
+                "SELECT COUNT(*) as cnt FROM products WHERE title LIKE ? OR handle LIKE ?",
+                (f"%{q}%", f"%{q}%"),
+            ).fetchone()
+        else:
+            count_row = cdb.execute("SELECT COUNT(*) as cnt FROM products").fetchone()
 
-    # Count total
-    if q:
-        count_row = cdb.execute(
-            "SELECT COUNT(*) as cnt FROM products WHERE title LIKE ? OR handle LIKE ?",
-            (f"%{q}%", f"%{q}%"),
-        ).fetchone()
-    else:
-        count_row = cdb.execute("SELECT COUNT(*) as cnt FROM products").fetchone()
+        total = count_row["cnt"]
+        total_pages = max(1, math.ceil(total / PAGE_SIZE))
+        offset = (page - 1) * PAGE_SIZE
 
-    total = count_row["cnt"]
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-    offset = (page - 1) * PAGE_SIZE
-
-    if q:
-        products = cdb.execute(
-            """SELECT p.*, COUNT(v.variant_id) as variant_count
-               FROM products p
-               LEFT JOIN variants v ON v.product_id = p.product_id
-               WHERE p.title LIKE ? OR p.handle LIKE ?
-               GROUP BY p.product_id
-               ORDER BY p.title
-               LIMIT ? OFFSET ?""",
-            (f"%{q}%", f"%{q}%", PAGE_SIZE, offset),
-        ).fetchall()
-    else:
-        products = cdb.execute(
-            """SELECT p.*, COUNT(v.variant_id) as variant_count
-               FROM products p
-               LEFT JOIN variants v ON v.product_id = p.product_id
-               GROUP BY p.product_id
-               ORDER BY p.title
-               LIMIT ? OFFSET ?""",
-            (PAGE_SIZE, offset),
-        ).fetchall()
-
-    cdb.close()
+        if q:
+            products = cdb.execute(
+                """SELECT p.*, COUNT(v.variant_id) as variant_count
+                   FROM products p
+                   LEFT JOIN variants v ON v.product_id = p.product_id
+                   WHERE p.title LIKE ? OR p.handle LIKE ?
+                   GROUP BY p.product_id
+                   ORDER BY p.title
+                   LIMIT ? OFFSET ?""",
+                (f"%{q}%", f"%{q}%", PAGE_SIZE, offset),
+            ).fetchall()
+        else:
+            products = cdb.execute(
+                """SELECT p.*, COUNT(v.variant_id) as variant_count
+                   FROM products p
+                   LEFT JOIN variants v ON v.product_id = p.product_id
+                   GROUP BY p.product_id
+                   ORDER BY p.title
+                   LIMIT ? OFFSET ?""",
+                (PAGE_SIZE, offset),
+            ).fetchall()
+    finally:
+        cdb.close()
 
     return templates.TemplateResponse("data_products.html", {
         "request": request,
@@ -88,30 +91,29 @@ def product_detail(request: Request, script_id: int, product_id: int):
         return RedirectResponse("/", status_code=303)
 
     cdb = get_crawler_db(script["db_path"])
+    try:
+        product = cdb.execute(
+            "SELECT * FROM products WHERE product_id = ?", (product_id,)
+        ).fetchone()
+        if not product:
+            return RedirectResponse(f"/data/{script_id}/products", status_code=303)
 
-    product = cdb.execute(
-        "SELECT * FROM products WHERE product_id = ?", (product_id,)
-    ).fetchone()
-    if not product:
+        # Get variants with latest snapshot
+        variants = cdb.execute(
+            """SELECT v.*,
+                      s.price_cents, s.compare_at_cents, s.available, s.crawled_at
+               FROM variants v
+               LEFT JOIN snapshots s ON s.variant_id = v.variant_id
+                 AND s.crawled_at = (
+                   SELECT MAX(s2.crawled_at) FROM snapshots s2
+                   WHERE s2.variant_id = v.variant_id
+                 )
+               WHERE v.product_id = ?
+               ORDER BY v.title""",
+            (product_id,),
+        ).fetchall()
+    finally:
         cdb.close()
-        return RedirectResponse(f"/data/{script_id}/products", status_code=303)
-
-    # Get variants with latest snapshot
-    variants = cdb.execute(
-        """SELECT v.*,
-                  s.price_cents, s.compare_at_cents, s.available, s.crawled_at
-           FROM variants v
-           LEFT JOIN snapshots s ON s.variant_id = v.variant_id
-             AND s.crawled_at = (
-               SELECT MAX(s2.crawled_at) FROM snapshots s2
-               WHERE s2.variant_id = v.variant_id
-             )
-           WHERE v.product_id = ?
-           ORDER BY v.title""",
-        (product_id,),
-    ).fetchall()
-
-    cdb.close()
 
     return templates.TemplateResponse("data_viewer.html", {
         "request": request,
@@ -129,19 +131,19 @@ def variant_history(request: Request, script_id: int, variant_id: int):
         return RedirectResponse("/", status_code=303)
 
     cdb = get_crawler_db(script["db_path"])
-
-    snapshots = cdb.execute(
-        """SELECT s.*, v.title as variant_title, p.title as product_title
-           FROM snapshots s
-           JOIN variants v ON v.variant_id = s.variant_id
-           JOIN products p ON p.product_id = s.product_id
-           WHERE s.variant_id = ?
-           ORDER BY s.crawled_at DESC
-           LIMIT 100""",
-        (variant_id,),
-    ).fetchall()
-
-    cdb.close()
+    try:
+        snapshots = cdb.execute(
+            """SELECT s.*, v.title as variant_title, p.title as product_title
+               FROM snapshots s
+               JOIN variants v ON v.variant_id = s.variant_id
+               JOIN products p ON p.product_id = s.product_id
+               WHERE s.variant_id = ?
+               ORDER BY s.crawled_at DESC
+               LIMIT ?""",
+            (variant_id, VARIANT_HISTORY_LIMIT),
+        ).fetchall()
+    finally:
+        cdb.close()
 
     return templates.TemplateResponse("data_snapshots.html", {
         "request": request,
@@ -159,18 +161,18 @@ def crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
         return RedirectResponse("/", status_code=303)
 
     cdb = get_crawler_db(script["db_path"])
+    try:
+        count_row = cdb.execute("SELECT COUNT(*) as cnt FROM crawl_stats").fetchone()
+        total = count_row["cnt"]
+        total_pages = max(1, math.ceil(total / PAGE_SIZE))
+        offset = (page - 1) * PAGE_SIZE
 
-    count_row = cdb.execute("SELECT COUNT(*) as cnt FROM crawl_stats").fetchone()
-    total = count_row["cnt"]
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-    offset = (page - 1) * PAGE_SIZE
-
-    stats = cdb.execute(
-        "SELECT * FROM crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
-        (PAGE_SIZE, offset),
-    ).fetchall()
-
-    cdb.close()
+        stats = cdb.execute(
+            "SELECT * FROM crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
+            (PAGE_SIZE, offset),
+        ).fetchall()
+    finally:
+        cdb.close()
 
     return templates.TemplateResponse("crawl_history.html", {
         "request": request,

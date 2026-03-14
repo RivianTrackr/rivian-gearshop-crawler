@@ -6,7 +6,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 
 from admin.db import init_admin_db
-from admin.auth import validate_session_token, get_csrf_token, COOKIE_NAME
+from admin.auth import validate_session_token, get_csrf_token, create_session_token, COOKIE_NAME
+from admin.config import SESSION_MAX_AGE
 from admin.routes import auth_routes, dashboard, scripts, config_editor, data_viewer, settings
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +53,16 @@ async def auth_and_csrf_middleware(request: Request, call_next):
         if submitted_csrf != request.state.csrf_token:
             return RedirectResponse(path, status_code=303)
 
-    return await call_next(request)
+    response = await call_next(request)
+
+    # Sliding window: refresh the session token on each request
+    new_token = create_session_token(session["uid"])
+    response.set_cookie(
+        COOKIE_NAME, new_token,
+        httponly=True, samesite="lax", max_age=SESSION_MAX_AGE,
+    )
+
+    return response
 
 
 # Register routers

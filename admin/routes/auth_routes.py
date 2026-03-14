@@ -1,3 +1,6 @@
+import time
+from collections import defaultdict
+
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -13,6 +16,24 @@ templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
 )
 
+# Rate limiting: track failed login attempts per IP
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_MAX_ATTEMPTS = 5       # max failures per window
+_WINDOW_SECONDS = 300   # 5-minute window
+
+
+def _is_rate_limited(ip: str) -> bool:
+    """Check if an IP has exceeded the login attempt limit."""
+    now = time.monotonic()
+    attempts = _login_attempts[ip]
+    # Prune old attempts outside the window
+    _login_attempts[ip] = [t for t in attempts if now - t < _WINDOW_SECONDS]
+    return len(_login_attempts[ip]) >= _MAX_ATTEMPTS
+
+
+def _record_failed_attempt(ip: str):
+    _login_attempts[ip].append(time.monotonic())
+
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -26,11 +47,21 @@ def login_page(request: Request):
 
 @router.post("/login", response_class=HTMLResponse)
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    client_ip = request.client.host if request.client else "unknown"
+
+    if _is_rate_limited(client_ip):
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "error": "Too many login attempts. Please try again later."}
+        )
+
     conn = get_admin_db()
-    row = conn.execute("SELECT id, password_hash FROM users WHERE username = ?", (username,)).fetchone()
-    conn.close()
+    try:
+        row = conn.execute("SELECT id, password_hash FROM users WHERE username = ?", (username,)).fetchone()
+    finally:
+        conn.close()
 
     if not row or not verify_password(password, row["password_hash"]):
+        _record_failed_attempt(client_ip)
         return templates.TemplateResponse(
             "login.html", {"request": request, "error": "Invalid username or password."}
         )
