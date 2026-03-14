@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from admin.db import init_admin_db
 from admin.auth import validate_session_token, get_csrf_token, create_session_token, COOKIE_NAME
@@ -24,55 +25,61 @@ def startup():
     init_admin_db()
 
 
-@app.middleware("http")
-async def auth_and_csrf_middleware(request: Request, call_next):
-    # Skip auth for login page and static files
-    path = request.url.path
-    if path.startswith("/static/") or path in ("/login", "/favicon.ico"):
-        return await call_next(request)
+class AuthCSRFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
 
-    # Logout needs auth check but no CSRF (just deletes cookie)
-    if path == "/logout" and request.method == "POST":
+        # Skip auth for login page and static files
+        if path.startswith("/static/") or path in ("/login", "/favicon.ico"):
+            return await call_next(request)
+
+        # Logout: validate session then clear cookie
+        if path == "/logout" and request.method == "POST":
+            token = request.cookies.get(COOKIE_NAME)
+            if token and validate_session_token(token):
+                response = RedirectResponse("/login", status_code=303)
+                response.delete_cookie(COOKIE_NAME)
+                return response
+            return RedirectResponse("/login", status_code=303)
+
+        # Check authentication
         token = request.cookies.get(COOKIE_NAME)
-        if token and validate_session_token(token):
+        if not token:
+            return RedirectResponse("/login", status_code=303)
+
+        session = validate_session_token(token)
+        if session is None:
             response = RedirectResponse("/login", status_code=303)
             response.delete_cookie(COOKIE_NAME)
             return response
-        return RedirectResponse("/login", status_code=303)
 
-    # Check authentication
-    token = request.cookies.get(COOKIE_NAME)
-    if not token:
-        return RedirectResponse("/login", status_code=303)
+        # Store session and CSRF token in request state
+        request.state.session = session
+        request.state.csrf_token = get_csrf_token(token)
 
-    session = validate_session_token(token)
-    if session is None:
-        response = RedirectResponse("/login", status_code=303)
-        response.delete_cookie(COOKIE_NAME)
+        # CSRF check on POST requests
+        # Read the raw body and cache it so downstream handlers can re-read it
+        if request.method == "POST":
+            body = await request.body()
+            # Parse form from the cached body
+            form = await request.form()
+            submitted_csrf = form.get("_csrf", "")
+            if submitted_csrf != request.state.csrf_token:
+                return RedirectResponse(path, status_code=303)
+
+        response = await call_next(request)
+
+        # Sliding window: refresh the session token on each request
+        new_token = create_session_token(session["uid"])
+        response.set_cookie(
+            COOKIE_NAME, new_token,
+            httponly=True, samesite="lax", max_age=SESSION_MAX_AGE,
+        )
+
         return response
 
-    # Store session and CSRF token in request state
-    request.state.session = session
-    request.state.csrf_token = get_csrf_token(token)
 
-    # CSRF check on POST requests
-    if request.method == "POST":
-        form = await request.form()
-        submitted_csrf = form.get("_csrf", "")
-        if submitted_csrf != request.state.csrf_token:
-            return RedirectResponse(path, status_code=303)
-
-    response = await call_next(request)
-
-    # Sliding window: refresh the session token on each request
-    new_token = create_session_token(session["uid"])
-    response.set_cookie(
-        COOKIE_NAME, new_token,
-        httponly=True, samesite="lax", max_age=SESSION_MAX_AGE,
-    )
-
-    return response
-
+app.add_middleware(AuthCSRFMiddleware)
 
 # Register routers
 app.include_router(auth_routes.router)
