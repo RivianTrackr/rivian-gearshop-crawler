@@ -44,6 +44,9 @@ BREVO_API_KEY   = os.getenv("BREVO_API_KEY", "")
 EMAIL_FROM      = os.getenv("EMAIL_FROM", "RivianTrackr Alerts <alerts@example.com>")
 EMAIL_TO        = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
 
+# Discord
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+
 # Tuning
 MAX_SCROLL_SECONDS = int(os.getenv("MAX_SCROLL_SECONDS", "120"))   # stop scroll after N sec
 PRODUCT_DELAY      = float(os.getenv("PRODUCT_DELAY", "0.2"))      # pause between product JSON hits
@@ -411,6 +414,97 @@ def build_email_fixed(is_initial, diffs, new_products, removed_products, initial
 
     parts.append("<p style='color:#666'>Note: Some items may not be purchasable online; they will still appear here with availability = No or a disabled purchase state from the product JSON.</p>")
     return "".join(parts)
+
+# ---------------------- Discord ----------------------
+
+def send_discord(subject, diffs=None, new_products=None, removed_products=None, is_heartbeat=False, heartbeat_info=None):
+    """Send a notification to Discord via webhook. Formats data as embeds."""
+    if not DISCORD_WEBHOOK_URL:
+        return
+
+    embeds = []
+
+    if is_heartbeat and heartbeat_info:
+        embeds.append({
+            "title": subject,
+            "description": (
+                f"No catalog changes detected.\n"
+                f"**Run time:** {heartbeat_info.get('run_time', 'N/A')}\n"
+                f"**Products seen:** {heartbeat_info.get('product_count', 0)}\n"
+                f"**HTML checks:** {heartbeat_info.get('html_checks', 0)}"
+            ),
+            "color": 0x3B82F6,  # blue
+        })
+    else:
+        # New products
+        if new_products:
+            lines = []
+            for p in new_products[:10]:
+                url = p.get("url", "")
+                title = p.get("title", p.get("handle", "Unknown"))
+                vendor = p.get("vendor") or ""
+                line = f"[{title}]({url})" if url else title
+                if vendor:
+                    line += f" — {vendor}"
+                lines.append(line)
+            if len(new_products) > 10:
+                lines.append(f"*...and {len(new_products) - 10} more*")
+            embeds.append({
+                "title": f"New Products ({len(new_products)})",
+                "description": "\n".join(lines),
+                "color": 0x34C759,  # green
+            })
+
+        # Removed products
+        if removed_products:
+            lines = []
+            for p in removed_products[:10]:
+                lines.append(f"{p.get('title', p.get('handle', 'Unknown'))}")
+            if len(removed_products) > 10:
+                lines.append(f"*...and {len(removed_products) - 10} more*")
+            embeds.append({
+                "title": f"Removed Products ({len(removed_products)})",
+                "description": "\n".join(lines),
+                "color": 0xFF3B30,  # red
+            })
+
+        # Variant changes
+        if diffs:
+            lines = []
+            for row in diffs[:15]:
+                product = row.get("product_title", "")
+                variant = row.get("variant_title") or ""
+                change = row.get("change_desc", "")
+                name = f"{product} ({variant})" if variant and variant != "Default Title" else product
+                url = row.get("variant_url") or row.get("url", "")
+                line = f"[{name}]({url}): {change}" if url else f"{name}: {change}"
+                lines.append(line)
+            if len(diffs) > 15:
+                lines.append(f"*...and {len(diffs) - 15} more changes*")
+            embeds.append({
+                "title": f"Variant Changes ({len(diffs)})",
+                "description": "\n".join(lines),
+                "color": 0xFBA919,  # gold
+            })
+
+    if not embeds:
+        return
+
+    # Discord limits: max 10 embeds, 6000 total chars
+    payload = {
+        "username": "RivianTrackr",
+        "embeds": embeds[:10],
+    }
+
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
+        if resp.status_code >= 300:
+            logger.error("Discord webhook failed: %d %s", resp.status_code, resp.text[:200])
+        else:
+            logger.info("Discord notification sent (%d embeds)", len(embeds))
+    except Exception as e:
+        logger.error("Discord webhook error: %s", e)
+
 
 # ---------------------- Availability Helpers (extra) ----------------------
 
@@ -809,6 +903,12 @@ def main():
         )
         subject = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
         send_email(subject, html)
+        send_discord(
+            subject,
+            diffs=diffs,
+            new_products=new_products_report_block,
+            removed_products=removed_products_report_block,
+        )
 
         # Remember newly reported removals to avoid re-emailing every run
         if removed_products_report_block:
@@ -831,6 +931,15 @@ def main():
                 <p style='color:#666'>Heartbeat is sent once per day at hour {HEARTBEAT_UTC_HOUR:02d}:00 UTC when there are no changes.</p>
             """
             send_email("RivianTrackr: Daily Heartbeat (No Changes)", html)
+            send_discord(
+                "RivianTrackr: Daily Heartbeat",
+                is_heartbeat=True,
+                heartbeat_info={
+                    "run_time": ts,
+                    "product_count": len(handle_to_url),
+                    "html_checks": get_avail_html_checks(),
+                },
+            )
             mark_heartbeat_sent(conn)
         else:
             log("No changes detected — not sending email (heartbeat either already sent today or outside heartbeat hour).")

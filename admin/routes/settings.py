@@ -46,22 +46,52 @@ def _read_env_value(env_path: str, key: str) -> str:
     return ""
 
 
-@router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request):
-    # Load email recipients from the first managed script's .env
+def _write_env_value(env_path: str, key: str, value: str):
+    """Update or append a single key=value in a .env file."""
+    lines = []
+    found = False
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                if line.strip().startswith(f"{key}=") or line.strip().startswith(f"#{key}="):
+                    val = value.strip()
+                    if " " in val or "," in val:
+                        val = f'"{val}"'
+                    lines.append(f"{key}={val}\n")
+                    found = True
+                else:
+                    lines.append(line)
+    if not found:
+        val = value.strip()
+        if " " in val or "," in val:
+            val = f'"{val}"'
+        lines.append(f"{key}={val}\n")
+    with open(env_path, "w") as f:
+        f.writelines(lines)
+
+
+def _get_env_path():
+    """Get the env file path from the first managed script."""
     conn = get_admin_db()
     try:
         script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
     finally:
         conn.close()
-
-    email_to = ""
     if script and script["env_file_path"]:
-        email_to = _read_env_value(script["env_file_path"], "EMAIL_TO")
+        return script["env_file_path"]
+    return None
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request):
+    env_path = _get_env_path()
+    email_to = _read_env_value(env_path, "EMAIL_TO") if env_path else ""
+    discord_webhook = _read_env_value(env_path, "DISCORD_WEBHOOK_URL") if env_path else ""
 
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "email_to": email_to,
+        "discord_webhook": discord_webhook,
         "csrf_token": request.state.csrf_token,
         "flash_message": None,
     })
@@ -98,46 +128,15 @@ def change_password(request: Request,
 
 @router.post("/settings/emails", response_class=HTMLResponse)
 def update_emails(request: Request, email_to: str = Form(...)):
-    # Validate email addresses
     error = _validate_email_list(email_to)
     if error:
         return _settings_response(request, email_to=email_to, flash=error, flash_type="error")
 
-    conn = get_admin_db()
-    try:
-        script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
-    finally:
-        conn.close()
-
-    if not script or not script["env_file_path"]:
+    env_path = _get_env_path()
+    if not env_path:
         return _settings_response(request, flash="No script configured.", flash_type="error")
 
-    env_path = script["env_file_path"]
-
-    # Read, update EMAIL_TO, write back
-    lines = []
-    found = False
-    if os.path.exists(env_path):
-        with open(env_path, "r") as f:
-            for line in f:
-                if line.strip().startswith("EMAIL_TO="):
-                    val = email_to.strip()
-                    if " " in val or "," in val:
-                        val = f'"{val}"'
-                    lines.append(f"EMAIL_TO={val}\n")
-                    found = True
-                else:
-                    lines.append(line)
-
-    if not found:
-        val = email_to.strip()
-        if " " in val or "," in val:
-            val = f'"{val}"'
-        lines.append(f"EMAIL_TO={val}\n")
-
-    with open(env_path, "w") as f:
-        f.writelines(lines)
-
+    _write_env_value(env_path, "EMAIL_TO", email_to)
     return _settings_response(request, email_to=email_to,
                               flash="Email recipients updated.", flash_type="success")
 
@@ -145,16 +144,10 @@ def update_emails(request: Request, email_to: str = Form(...)):
 @router.post("/settings/test-email", response_class=HTMLResponse)
 def send_test_email(request: Request):
     """Send a test email using the configured Brevo API key and recipients."""
-    conn = get_admin_db()
-    try:
-        script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
-    finally:
-        conn.close()
-
-    if not script or not script["env_file_path"]:
+    env_path = _get_env_path()
+    if not env_path:
         return _settings_response(request, flash="No script configured.", flash_type="error")
 
-    env_path = script["env_file_path"]
     brevo_key = _read_env_value(env_path, "BREVO_API_KEY")
     email_from = _read_env_value(env_path, "EMAIL_FROM") or "RivianTrackr Alerts <alerts@example.com>"
     email_to_str = _read_env_value(env_path, "EMAIL_TO")
@@ -167,7 +160,6 @@ def send_test_email(request: Request):
 
     recipients = [e.strip() for e in email_to_str.split(",") if e.strip()]
 
-    # Parse sender
     m = re.search(r"<([^>]+)>", email_from)
     if m:
         sender_email = m.group(1)
@@ -218,28 +210,87 @@ def send_test_email(request: Request):
             )
     except Exception as e:
         logger.error("Test email exception: %s", e)
+        return _settings_response(request, flash=f"Email send error: {e}", flash_type="error")
+
+
+@router.post("/settings/discord", response_class=HTMLResponse)
+def update_discord(request: Request, discord_webhook: str = Form("")):
+    env_path = _get_env_path()
+    if not env_path:
+        return _settings_response(request, flash="No script configured.", flash_type="error")
+
+    webhook = discord_webhook.strip()
+    if webhook and not webhook.startswith("https://discord.com/api/webhooks/"):
         return _settings_response(
             request,
-            flash=f"Email send error: {e}",
+            flash="Invalid Discord webhook URL. Must start with https://discord.com/api/webhooks/",
             flash_type="error",
         )
 
+    _write_env_value(env_path, "DISCORD_WEBHOOK_URL", webhook)
+    return _settings_response(
+        request,
+        flash="Discord webhook updated." if webhook else "Discord webhook removed.",
+        flash_type="success",
+    )
+
+
+@router.post("/settings/test-discord", response_class=HTMLResponse)
+def send_test_discord(request: Request):
+    """Send a test notification to Discord."""
+    env_path = _get_env_path()
+    if not env_path:
+        return _settings_response(request, flash="No script configured.", flash_type="error")
+
+    webhook_url = _read_env_value(env_path, "DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        return _settings_response(request, flash="Discord webhook URL is not configured.", flash_type="error")
+
+    payload = {
+        "username": "RivianTrackr",
+        "embeds": [{
+            "title": "RivianTrackr: Test Notification",
+            "description": (
+                "This is a test notification from your RivianTrackr admin panel.\n"
+                "If you're reading this, your Discord webhook is working correctly."
+            ),
+            "color": 0xFBA919,
+        }],
+    }
+
+    try:
+        resp = http_requests.post(webhook_url, json=payload, timeout=15)
+        if resp.status_code < 300:
+            logger.info("Test Discord notification sent")
+            return _settings_response(
+                request,
+                flash="Test notification sent to Discord.",
+                flash_type="success",
+            )
+        else:
+            logger.error("Test Discord failed: %d %s", resp.status_code, resp.text)
+            return _settings_response(
+                request,
+                flash=f"Discord send failed (HTTP {resp.status_code}): {resp.text[:200]}",
+                flash_type="error",
+            )
+    except Exception as e:
+        logger.error("Test Discord exception: %s", e)
+        return _settings_response(request, flash=f"Discord send error: {e}", flash_type="error")
+
 
 def _settings_response(request: Request, flash: str = None, flash_type: str = "info",
-                       email_to: str = None):
+                       email_to: str = None, discord_webhook: str = None):
+    env_path = _get_env_path()
     if email_to is None:
-        conn = get_admin_db()
-        try:
-            script = conn.execute("SELECT * FROM managed_scripts LIMIT 1").fetchone()
-        finally:
-            conn.close()
-        email_to = ""
-        if script and script["env_file_path"]:
-            email_to = _read_env_value(script["env_file_path"], "EMAIL_TO")
+        email_to = _read_env_value(env_path, "EMAIL_TO") if env_path else ""
+    if discord_webhook is None:
+        discord_webhook = _read_env_value(env_path, "DISCORD_WEBHOOK_URL") if env_path else ""
 
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "email_to": email_to,
+        "discord_webhook": discord_webhook,
         "csrf_token": request.state.csrf_token,
         "flash_message": flash,
         "flash_type": flash_type,
