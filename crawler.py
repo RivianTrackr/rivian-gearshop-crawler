@@ -5,6 +5,7 @@ import os
 import re
 import json
 import time
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urljoin
@@ -26,9 +27,15 @@ from availability import infer_availability_from_html, get_avail_html_checks, re
 
 load_dotenv()
 
+logger = logging.getLogger("crawler")
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.DEBUG if os.getenv("CRAWLER_DEBUG", "0") == "1" else logging.INFO,
+)
+
 def log(msg: str):
-    if os.getenv("CRAWLER_DEBUG", "0") == "1":
-        print(f"[DEBUG] {msg}", flush=True)
+    logger.debug(msg)
 
 SITE_ROOT       = (os.getenv("SITE_ROOT", "https://gearshop.rivian.com")).rstrip("/")
 COLLECTION_URL  = os.getenv("COLLECTION_URL", f"{SITE_ROOT}/collections/all")
@@ -132,7 +139,7 @@ def export_current_inventory_json(conn, out_path="/opt/rivian-gearshop-crawler/g
         })
 
     write_json(rows, out_path=out_path)
-    print(f"[OK] wrote JSON with {len(rows)} items to {out_path}")
+    logger.info("Wrote JSON with %d items to %s", len(rows), out_path)
 
 # ---------------------- SQLite Schema ----------------------
 
@@ -295,7 +302,10 @@ def fetch_product_json(handle):
     url = f"{SITE_ROOT}/products/{handle}.json"
     r = _retry_session.get(url, headers=HEADERS, timeout=30)
     r.raise_for_status()
-    return r.json()["product"]
+    data = r.json()
+    if "product" not in data:
+        raise ValueError(f"Missing 'product' key in JSON response for {handle}")
+    return data["product"]
 
 def cents(value):
     if value is None:
@@ -316,9 +326,9 @@ def render_money(cents_val):
 
 def send_email(subject, html):
     if not BREVO_API_KEY:
-        print("[WARN] BREVO_API_KEY missing; printing email instead.")
-        print(subject)
-        print(html)
+        logger.warning("BREVO_API_KEY missing; printing email instead.")
+        logger.info("Subject: %s", subject)
+        logger.info(html)
         return
 
     # Extract sender email & name
@@ -340,7 +350,7 @@ def send_email(subject, html):
     url = "https://api.brevo.com/v3/smtp/email"
     resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
     if resp.status_code >= 300:
-        print(f"[ERROR] Brevo send failed: {resp.status_code} {resp.text}")
+        logger.error("Brevo send failed: %d %s", resp.status_code, resp.text)
 
 def build_email_fixed(is_initial, diffs, new_products, removed_products, initial_rows=None):
     title = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
@@ -477,14 +487,20 @@ def main():
 
     # --- Collect product links with lazy-load + one retry if suspiciously low
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-            ],
-        )
+        try:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                ],
+                timeout=60000,  # 60s launch timeout
+            )
+        except Exception as e:
+            logger.error("Failed to launch browser: %s", e)
+            return
+
         context = browser.new_context(user_agent=HEADERS.get("User-Agent"))
         page = context.new_page()
         links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
@@ -541,7 +557,7 @@ def main():
             try:
                 pj = fetch_product_json(handle)
             except Exception as e:
-                print(f"[WARN] Failed JSON for {handle}: {e}")
+                logger.warning("Failed JSON for %s: %s", handle, e)
                 continue
 
             product_id = pj.get("id")
@@ -673,9 +689,10 @@ def main():
 
         # Clear dedupe memory for any product seen this run (so future removals can be re-reported)
         if seen_product_ids:
+            placeholders = ",".join("?" for _ in seen_product_ids)
             conn.execute(
-                f"DELETE FROM removed_once WHERE product_id IN ({','.join('?' for _ in seen_product_ids)})",
-                tuple(seen_product_ids)
+                f"DELETE FROM removed_once WHERE product_id IN ({placeholders})",
+                list(seen_product_ids)
             )
 
         conn.commit()

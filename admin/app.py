@@ -28,7 +28,7 @@ def startup():
 async def auth_and_csrf_middleware(request: Request, call_next):
     # Skip auth for login page and static files
     path = request.url.path
-    if path.startswith("/static") or path == "/login" or path == "/favicon.ico":
+    if path.startswith("/static/") or path == "/login" or path == "/favicon.ico":
         return await call_next(request)
 
     # Check authentication

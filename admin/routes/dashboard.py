@@ -15,8 +15,10 @@ templates = Jinja2Templates(
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     conn = get_admin_db()
-    rows = conn.execute("SELECT * FROM managed_scripts ORDER BY display_name").fetchall()
-    conn.close()
+    try:
+        rows = conn.execute("SELECT * FROM managed_scripts ORDER BY display_name").fetchall()
+    finally:
+        conn.close()
 
     scripts = []
     for row in rows:

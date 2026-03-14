@@ -1,12 +1,13 @@
 import os
 import shutil
+import tempfile
 
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from admin.db import get_admin_db
 from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS, KNOWN_ENV_KEYS
+from admin.routes.helpers import get_script as _get_script
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -115,17 +116,18 @@ def _write_env_file(path: str, keys: list[str], values: list[str]):
                 val = f'"{val}"'
             output_lines.append(f"{key}={val}\n")
 
-    with open(path, "w") as f:
-        f.writelines(output_lines)
-
-
-def _get_script(script_id: int):
-    conn = get_admin_db()
+    # Atomic write: write to temp file then rename to prevent corruption
+    dir_name = os.path.dirname(path)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=".env.", suffix=".tmp")
     try:
-        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
-        return row
-    finally:
-        conn.close()
+        with os.fdopen(fd, "w") as f:
+            f.writelines(output_lines)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
 
 
 @router.get("/scripts/{script_id}/config", response_class=HTMLResponse)

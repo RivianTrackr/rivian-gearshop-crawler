@@ -5,7 +5,8 @@ from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from admin.db import get_admin_db, get_crawler_db
+from admin.db import get_crawler_db
+from admin.routes.helpers import get_script as _get_script
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -14,15 +15,6 @@ templates = Jinja2Templates(
 
 PAGE_SIZE = 50
 VARIANT_HISTORY_LIMIT = 100
-
-
-def _get_script(script_id: int):
-    conn = get_admin_db()
-    try:
-        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
-        return row
-    finally:
-        conn.close()
 
 
 @router.get("/data/{script_id}/products", response_class=HTMLResponse)

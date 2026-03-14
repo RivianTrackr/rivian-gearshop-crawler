@@ -1,4 +1,5 @@
 import time
+import logging
 from collections import defaultdict
 
 from fastapi import APIRouter, Request, Form
@@ -10,6 +11,8 @@ from admin.auth import (
     verify_password, create_session_token, COOKIE_NAME,
 )
 from admin.db import get_admin_db
+
+logger = logging.getLogger("admin.auth")
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -50,6 +53,7 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
     client_ip = request.client.host if request.client else "unknown"
 
     if _is_rate_limited(client_ip):
+        logger.warning("Rate limited login attempt from %s", client_ip)
         return templates.TemplateResponse(
             "login.html", {"request": request, "error": "Too many login attempts. Please try again later."}
         )
@@ -62,6 +66,7 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
 
     if not row or not verify_password(password, row["password_hash"]):
         _record_failed_attempt(client_ip)
+        logger.warning("Failed login attempt for user '%s' from %s", username, client_ip)
         return templates.TemplateResponse(
             "login.html", {"request": request, "error": "Invalid username or password."}
         )
