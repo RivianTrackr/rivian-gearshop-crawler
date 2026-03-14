@@ -57,7 +57,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # Store session and CSRF token in request state for routes to use
         request.state.session = session
-        request.state.csrf_token = get_csrf_token(token)
+        request.state.csrf_token = get_csrf_token(session["uid"])
 
         response = await call_next(request)
 
