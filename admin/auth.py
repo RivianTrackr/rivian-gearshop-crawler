@@ -58,9 +58,11 @@ def require_auth_dependency(request: Request) -> dict:
     return validate_session_token(token)
 
 
-def verify_csrf(request: Request, csrf: str = Form("", alias="_csrf")) -> str:
+async def verify_csrf(request: Request) -> str:
     """FastAPI dependency that validates the CSRF token from form data.
-    Must be included as a parameter in every POST route handler."""
+    Must be included as a Depends() in every POST route handler."""
+    form = await request.form()
+    csrf = form.get("_csrf", "")
     expected = getattr(request.state, "csrf_token", None)
     if not expected or csrf != expected:
         raise HTTPException(status_code=403, detail="CSRF validation failed")
