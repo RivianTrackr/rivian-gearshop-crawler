@@ -58,10 +58,10 @@ def require_auth_dependency(request: Request) -> dict:
     return validate_session_token(token)
 
 
-def verify_csrf(request: Request, _csrf: str = Form("")) -> str:
+def verify_csrf(request: Request, csrf: str = Form("", alias="_csrf")) -> str:
     """FastAPI dependency that validates the CSRF token from form data.
     Must be included as a parameter in every POST route handler."""
     expected = getattr(request.state, "csrf_token", None)
-    if not expected or _csrf != expected:
+    if not expected or csrf != expected:
         raise HTTPException(status_code=403, detail="CSRF validation failed")
-    return _csrf
+    return csrf
