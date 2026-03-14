@@ -54,6 +54,11 @@
 {% endif %}
 
 <p>
+  <a href="/data/{{ script.id }}/export.csv" role="button" class="outline secondary" style="padding:4px 12px;display:inline-block">Export CSV</a>
+  <a href="/data/{{ script.id }}/export.json" role="button" class="outline secondary" style="padding:4px 12px;display:inline-block">Export JSON</a>
+</p>
+
+<p>
   <a href="/data/{{ script.id }}/crawl-history">View Crawl History</a> |
   <a href="/scripts/{{ script.id }}">&larr; Back to script detail</a>
 </p>
