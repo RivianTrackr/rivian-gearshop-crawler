@@ -33,9 +33,9 @@ def validate_session_token(token: str) -> dict | None:
         return None
 
 
-def get_csrf_token(session_token: str) -> str:
+def get_csrf_token(user_id: int) -> str:
     return hmac.HMAC(
-        SECRET_KEY.encode(), session_token.encode(), hashlib.sha256
+        SECRET_KEY.encode(), str(user_id).encode(), hashlib.sha256
     ).hexdigest()[:32]
 
 
