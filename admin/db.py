@@ -25,6 +25,18 @@ CREATE TABLE IF NOT EXISTS managed_scripts (
     description TEXT,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS script_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    script_id INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    config TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (script_id) REFERENCES managed_scripts(id),
+    UNIQUE(script_id, channel)
+);
 """
 
 DEFAULT_SCRIPT = {
@@ -98,5 +110,21 @@ def init_admin_db():
             ),
         )
         conn.commit()
+
+    # Ensure script_notifications table exists (handles upgrades)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS script_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            script_id INTEGER NOT NULL,
+            channel TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            config TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (script_id) REFERENCES managed_scripts(id),
+            UNIQUE(script_id, channel)
+        )
+    """)
+    conn.commit()
 
     conn.close()

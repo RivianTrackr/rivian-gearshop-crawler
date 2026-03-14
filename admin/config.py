@@ -47,6 +47,7 @@ KNOWN_ENV_KEYS = {
     "PRODUCT_DELAY", "MAX_SCROLL_SECONDS", "AVAIL_HTML_MAX",
     "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG", "JSON_OUT_PATH",
     "ADMIN_SECRET_KEY", "ADMIN_PORT", "ADMIN_DB_PATH",
+    "SCRIPT_NAME",
 }
 
 # Keys whose values should be masked in the UI

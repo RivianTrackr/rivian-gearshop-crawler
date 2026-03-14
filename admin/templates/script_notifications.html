@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Notifications — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ul>
+    <li><a href="/">Dashboard</a></li>
+    <li><a href="/scripts/{{ script.id }}">{{ script.display_name }}</a></li>
+    <li>Notifications</li>
+  </ul>
+</nav>
+
+<h2>Notification Settings</h2>
+<p>Configure how <strong>{{ script.display_name }}</strong> sends alerts when changes are detected.</p>
+
+{% if flash_message %}
+<article aria-label="alert" style="padding: 0.75rem 1rem; margin-bottom: 1rem;
+  background: {% if flash_type == 'error' %}#fef2f2{% elif flash_type == 'success' %}#f0fdf4{% else %}#eff6ff{% endif %};
+  border-left: 4px solid {% if flash_type == 'error' %}#ef4444{% elif flash_type == 'success' %}#22c55e{% else %}#3b82f6{% endif %};">
+  {{ flash_message }}
+</article>
+{% endif %}
+
+<article>
+  <header><strong>Email Notifications (Brevo)</strong></header>
+  <form method="post" action="/scripts/{{ script.id }}/notifications/email">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <label>
+      <input type="checkbox" name="email_enabled" role="switch"
+             {% if email.enabled %}checked{% endif %}>
+      Enable email notifications
+    </label>
+
+    <label for="brevo_api_key">Brevo API Key</label>
+    <input type="password" id="brevo_api_key" name="brevo_api_key"
+           value="{{ email.config.get('brevo_api_key', '') }}"
+           placeholder="xkeysib-...">
+
+    <label for="email_from">Sender (From)</label>
+    <input type="text" id="email_from" name="email_from"
+           value="{{ email.config.get('email_from', '') }}"
+           placeholder="RivianTrackr Alerts <alerts@example.com>">
+
+    <label for="email_to">Recipients (comma-separated)</label>
+    <input type="text" id="email_to" name="email_to"
+           value="{{ email.config.get('email_to', '') }}"
+           placeholder="user1@example.com, user2@example.com">
+
+    <div role="group">
+      <button type="submit">Save Email Settings</button>
+    </div>
+  </form>
+
+  <form method="post" action="/scripts/{{ script.id }}/notifications/test-email" style="margin-top: 0.5rem;">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button type="submit" class="outline secondary">Send Test Email</button>
+  </form>
+</article>
+
+<article>
+  <header><strong>Discord Notifications</strong></header>
+  <p>Send change alerts to a Discord channel via webhook.
+    <a href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks" target="_blank" rel="noopener">How to create a webhook</a>
+  </p>
+  <form method="post" action="/scripts/{{ script.id }}/notifications/discord">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <label>
+      <input type="checkbox" name="discord_enabled" role="switch"
+             {% if discord.enabled %}checked{% endif %}>
+      Enable Discord notifications
+    </label>
+
+    <label for="discord_webhook_url">Webhook URL</label>
+    <input type="url" id="discord_webhook_url" name="discord_webhook_url"
+           value="{{ discord.config.get('webhook_url', '') }}"
+           placeholder="https://discord.com/api/webhooks/...">
+
+    <div role="group">
+      <button type="submit">Save Discord Settings</button>
+    </div>
+  </form>
+
+  <form method="post" action="/scripts/{{ script.id }}/notifications/test-discord" style="margin-top: 0.5rem;">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <button type="submit" class="outline secondary">Send Test Notification</button>
+  </form>
+</article>
+{% endblock %}

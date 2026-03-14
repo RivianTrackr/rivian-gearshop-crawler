@@ -4,6 +4,14 @@
 {% block content %}
 <h2>Settings</h2>
 
+{% if flash_message %}
+<article aria-label="alert" style="padding: 0.75rem 1rem; margin-bottom: 1rem;
+  background: {% if flash_type == 'error' %}#fef2f2{% elif flash_type == 'success' %}#f0fdf4{% else %}#eff6ff{% endif %};
+  border-left: 4px solid {% if flash_type == 'error' %}#ef4444{% elif flash_type == 'success' %}#22c55e{% else %}#3b82f6{% endif %};">
+  {{ flash_message }}
+</article>
+{% endif %}
+
 <article>
   <header><strong>Change Password</strong></header>
   <form method="post" action="/settings/password">
@@ -23,41 +31,12 @@
 </article>
 
 <article>
-  <header><strong>Email Notifications</strong></header>
-  <form method="post" action="/settings/emails">
-    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-
-    <label for="email_to">
-      Recipients (comma-separated)
-    </label>
-    <input type="text" id="email_to" name="email_to" value="{{ email_to }}"
-           placeholder="user1@example.com, user2@example.com">
-
-    <button type="submit">Update Recipients</button>
-  </form>
-
-  <form method="post" action="/settings/test-email" style="margin-top: 0.5rem;">
-    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-    <button type="submit" class="outline secondary">Send Test Email</button>
-  </form>
-</article>
-
-<article>
-  <header><strong>Discord Notifications</strong></header>
-  <p>Send change alerts to a Discord channel via webhook. <a href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks" target="_blank" rel="noopener">How to create a webhook</a></p>
-  <form method="post" action="/settings/discord">
-    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-
-    <label for="discord_webhook">Webhook URL</label>
-    <input type="url" id="discord_webhook" name="discord_webhook" value="{{ discord_webhook }}"
-           placeholder="https://discord.com/api/webhooks/...">
-
-    <button type="submit">Update Webhook</button>
-  </form>
-
-  <form method="post" action="/settings/test-discord" style="margin-top: 0.5rem;">
-    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-    <button type="submit" class="outline secondary">Send Test Notification</button>
-  </form>
+  <header><strong>Notifications</strong></header>
+  <p>Email and Discord notification settings are now configured per script. Visit a script's detail page and click <strong>Notifications</strong> to configure.</p>
+  {% for script in scripts %}
+  <a href="/scripts/{{ script.id }}/notifications" role="button" class="outline" style="margin-right: 0.5rem; margin-bottom: 0.5rem;">
+    {{ script.display_name }} Notifications
+  </a>
+  {% endfor %}
 </article>
 {% endblock %}
