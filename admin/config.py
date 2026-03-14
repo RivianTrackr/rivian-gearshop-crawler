@@ -42,6 +42,7 @@ HIDDEN_CONFIG_KEYS = {"ADMIN_SECRET_KEY"}
 # Known .env keys for the gearshop crawler (used for allowlist validation)
 KNOWN_ENV_KEYS = {
     "BREVO_API_KEY", "EMAIL_FROM", "EMAIL_TO",
+    "DISCORD_WEBHOOK_URL",
     "SITE_ROOT", "COLLECTION_URL", "DB_PATH",
     "PRODUCT_DELAY", "MAX_SCROLL_SECONDS", "AVAIL_HTML_MAX",
     "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG", "JSON_OUT_PATH",
@@ -49,4 +50,4 @@ KNOWN_ENV_KEYS = {
 }
 
 # Keys whose values should be masked in the UI
-SENSITIVE_KEYS = {"BREVO_API_KEY", "ADMIN_SECRET_KEY"}
+SENSITIVE_KEYS = {"BREVO_API_KEY", "ADMIN_SECRET_KEY", "DISCORD_WEBHOOK_URL"}
