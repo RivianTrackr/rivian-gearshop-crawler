@@ -101,7 +101,7 @@ def get_timer_active(timer_unit: str) -> bool:
 
 def start_service(unit: str) -> tuple[bool, str]:
     r = subprocess.run(
-        ["systemctl", "start", unit],
+        ["systemctl", "start", "--no-block", unit],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
     return r.returncode == 0, r.stderr
