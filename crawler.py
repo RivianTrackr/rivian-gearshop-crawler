@@ -520,19 +520,23 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
 
     embeds = []
     mentions = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    embed_footer = {"text": "RivianTrackr \u2022 Gear Shop Monitor"}
 
     if is_heartbeat and heartbeat_info:
         if not cfg.get("notify_heartbeat", True):
             return
         embeds.append({
             "title": subject,
-            "description": (
-                f"No catalog changes detected.\n"
-                f"**Run time:** {heartbeat_info.get('run_time', 'N/A')}\n"
-                f"**Products seen:** {heartbeat_info.get('product_count', 0)}\n"
-                f"**HTML checks:** {heartbeat_info.get('html_checks', 0)}"
-            ),
+            "description": "No catalog changes detected.",
+            "fields": [
+                {"name": "Run Time", "value": str(heartbeat_info.get("run_time", "N/A")), "inline": True},
+                {"name": "Products Seen", "value": str(heartbeat_info.get("product_count", 0)), "inline": True},
+                {"name": "HTML Checks", "value": str(heartbeat_info.get("html_checks", 0)), "inline": True},
+            ],
             "color": 0x3B82F6,  # blue
+            "footer": embed_footer,
+            "timestamp": now_iso,
         })
     else:
         # New products
@@ -542,9 +546,9 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
                 url = p.get("url", "")
                 title = p.get("title", p.get("handle", "Unknown"))
                 vendor = p.get("vendor") or ""
-                line = f"[{title}]({url})" if url else title
+                line = f"\u2022 [{title}]({url})" if url else f"\u2022 {title}"
                 if vendor:
-                    line += f" — {vendor}"
+                    line += f" \u2014 *{vendor}*"
                 lines.append(line)
             if len(new_products) > 10:
                 lines.append(f"*...and {len(new_products) - 10} more*")
@@ -552,6 +556,8 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
                 "title": f"New Products ({len(new_products)})",
                 "description": "\n".join(lines),
                 "color": 0x34C759,  # green
+                "footer": embed_footer,
+                "timestamp": now_iso,
             })
             mention = _discord_mention("new")
             if mention:
@@ -561,13 +567,15 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
         if removed_products and cfg.get("notify_removed_products", True):
             lines = []
             for p in removed_products[:10]:
-                lines.append(f"{p.get('title', p.get('handle', 'Unknown'))}")
+                lines.append(f"\u2022 {p.get('title', p.get('handle', 'Unknown'))}")
             if len(removed_products) > 10:
                 lines.append(f"*...and {len(removed_products) - 10} more*")
             embeds.append({
                 "title": f"Removed Products ({len(removed_products)})",
                 "description": "\n".join(lines),
                 "color": 0xFF3B30,  # red
+                "footer": embed_footer,
+                "timestamp": now_iso,
             })
             mention = _discord_mention("removed")
             if mention:
@@ -582,7 +590,7 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
                 change = row.get("change_desc", "")
                 name = f"{product} ({variant})" if variant and variant != "Default Title" else product
                 url = row.get("variant_url") or row.get("url", "")
-                line = f"[{name}]({url}): {change}" if url else f"{name}: {change}"
+                line = f"\u2022 [{name}]({url}): **{change}**" if url else f"\u2022 {name}: **{change}**"
                 lines.append(line)
             if len(diffs) > 15:
                 lines.append(f"*...and {len(diffs) - 15} more changes*")
@@ -590,6 +598,8 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
                 "title": f"Variant Changes ({len(diffs)})",
                 "description": "\n".join(lines),
                 "color": accent_color,
+                "footer": embed_footer,
+                "timestamp": now_iso,
             })
             mention = _discord_mention("changes")
             if mention:
