@@ -23,6 +23,12 @@ from pathlib import Path
 # Availability fallbacks (external helper you already have)
 from availability import infer_availability_from_html, get_avail_html_checks, reset_avail_state
 
+# Notification retry queue and error alerting
+from notify import retry_queue, send_error_alert
+
+# Schema migrations
+from migrations import run_migrations
+
 # ---------------------- Config & Logging ----------------------
 
 load_dotenv()
@@ -282,8 +288,12 @@ def db():
     return conn
 
 def init_db():
-    with db() as conn:
+    conn = db()
+    try:
         conn.executescript(SCHEMA)
+        run_migrations(conn)
+    finally:
+        conn.close()
 
 def latest_snapshot_for_variant(conn, variant_id):
     cur = conn.execute(
@@ -423,9 +433,14 @@ def send_email(subject, html):
     }
     headers = {"accept": "application/json", "api-key": BREVO_API_KEY, "content-type": "application/json"}
     url = "https://api.brevo.com/v3/smtp/email"
-    resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
-    if resp.status_code >= 300:
-        logger.error("Brevo send failed: %d %s", resp.status_code, resp.text)
+    try:
+        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+        if resp.status_code >= 300:
+            logger.error("Brevo send failed: %d %s", resp.status_code, resp.text)
+            retry_queue.enqueue("email", send_email, args=(subject, html))
+    except Exception as e:
+        logger.error("Brevo send exception: %s", e)
+        retry_queue.enqueue("email", send_email, args=(subject, html))
 
 def build_email_fixed(is_initial, diffs, new_products, removed_products, initial_rows=None):
     title = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
@@ -630,10 +645,22 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
         resp = requests.post(url, json=payload, timeout=15)
         if resp.status_code >= 300:
             logger.error("Discord webhook failed: %d %s", resp.status_code, resp.text[:200])
+            retry_queue.enqueue(
+                "discord", send_discord,
+                args=(subject,),
+                kwargs=dict(diffs=diffs, new_products=new_products, removed_products=removed_products,
+                            is_heartbeat=is_heartbeat, heartbeat_info=heartbeat_info),
+            )
         else:
             logger.info("Discord notification sent (%d embeds)", len(embeds))
     except Exception as e:
         logger.error("Discord webhook error: %s", e)
+        retry_queue.enqueue(
+            "discord", send_discord,
+            args=(subject,),
+            kwargs=dict(diffs=diffs, new_products=new_products, removed_products=removed_products,
+                        is_heartbeat=is_heartbeat, heartbeat_info=heartbeat_info),
+        )
 
 
 # ---------------------- Availability Helpers (extra) ----------------------
@@ -704,10 +731,22 @@ def confirm_product_removed(handle, timeout=15):
 
 # ---------------------- Main Crawl ----------------------
 
+def _error_alert_ctx():
+    """Build context kwargs for send_error_alert from current config."""
+    return dict(
+        discord_webhook_url=DISCORD_WEBHOOK_URL,
+        discord_config=DISCORD_CONFIG,
+        brevo_api_key=BREVO_API_KEY,
+        email_from=EMAIL_FROM,
+        email_to=EMAIL_TO,
+    )
+
+
 def main():
     init_db()
     reset_avail_state()
     crawled_at = now_utc_iso()
+    run_start = time.time()
 
     # --- Collect product links with lazy-load + one retry if suspiciously low
     with sync_playwright() as p:
@@ -723,6 +762,13 @@ def main():
             )
         except Exception as e:
             logger.error("Failed to launch browser: %s", e)
+            send_error_alert(
+                "Browser Launch Failed",
+                "Playwright/Chromium failed to start. The crawl was aborted.",
+                details=str(e),
+                **_error_alert_ctx(),
+            )
+            _record_crawl_run(crawled_at, run_start, status="error", error_message=str(e))
             return
 
         context = browser.new_context(user_agent=HEADERS.get("User-Agent"))
@@ -752,9 +798,18 @@ def main():
     prev_count = last_product_count(conn)
     current_count = len(handle_to_url)
     if prev_count and prev_count >= 100 and current_count < max(20, int(prev_count * 0.5)):
-        log(f"Anomaly: only {current_count} products vs last {prev_count}. Skipping this run to avoid false removals.")
+        msg = f"Anomaly: only {current_count} products vs last {prev_count}. Skipping this run to avoid false removals."
+        log(msg)
+        send_error_alert(
+            "Anomaly Guard Triggered",
+            msg,
+            details=f"Previous count: {prev_count}\nCurrent count: {current_count}\nThreshold: {max(20, int(prev_count * 0.5))}",
+            **_error_alert_ctx(),
+        )
         conn.execute("INSERT OR REPLACE INTO crawl_stats (run_at, product_count) VALUES (?,?)", (now_utc_iso(), current_count))
         conn.commit()
+        _record_crawl_run(crawled_at, run_start, status="skipped", product_count=current_count,
+                          error_message=msg)
         export_current_inventory_json(
             conn,
             out_path=os.getenv("JSON_OUT_PATH", "/opt/rivian-gearshop-crawler/gearshop.json"),
@@ -1008,9 +1063,16 @@ def main():
         conn.commit()
         cur.close()
 
-    except Exception:
+    except Exception as exc:
         conn.rollback()
         conn.close()
+        send_error_alert(
+            "Crawl Failed",
+            "An unhandled error occurred during the crawl run.",
+            details=f"{type(exc).__name__}: {exc}",
+            **_error_alert_ctx(),
+        )
+        _record_crawl_run(crawled_at, run_start, status="error", error_message=str(exc))
         raise
 
     # Summary log
@@ -1088,7 +1150,57 @@ def main():
         site_root=SITE_ROOT
     )
 
+    # Record successful crawl run
+    _record_crawl_run(
+        crawled_at, run_start, status="success",
+        product_count=len(handle_to_url),
+        variants_changed=len(diffs),
+        new_products=len(new_products_report_block),
+        removed_products=len(removed_products_report_block),
+        html_checks=get_avail_html_checks(),
+    )
+
+    # Flush retry queue for any failed notifications
+    if retry_queue.pending_count > 0:
+        logger.info("Flushing retry queue (%d pending)...", retry_queue.pending_count)
+        permanently_failed = retry_queue.flush()
+        if permanently_failed:
+            labels = ", ".join(item["label"] for item in permanently_failed)
+            send_error_alert(
+                "Notification Delivery Failed",
+                f"{len(permanently_failed)} notification(s) failed after all retries: {labels}",
+                **_error_alert_ctx(),
+            )
+
     conn.close()
+
+
+def _record_crawl_run(crawled_at, run_start, status="success", product_count=None,
+                       variants_changed=None, new_products=None, removed_products=None,
+                       html_checks=None, error_message=None):
+    """Record a crawl run in the crawl_runs table for history/metrics."""
+    duration = round(time.time() - run_start, 2)
+    finished_at = now_utc_iso()
+    try:
+        conn = db()
+        # Check if crawl_runs table exists (created by migration v2)
+        table_check = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='crawl_runs'"
+        ).fetchone()
+        if table_check:
+            conn.execute(
+                """INSERT INTO crawl_runs
+                   (started_at, finished_at, status, product_count, variants_changed,
+                    new_products, removed_products, html_checks, error_message, duration_seconds)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (crawled_at, finished_at, status, product_count, variants_changed,
+                 new_products, removed_products, html_checks, error_message, duration),
+            )
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("Failed to record crawl run: %s", e)
+
 
 if __name__ == "__main__":
     main()
