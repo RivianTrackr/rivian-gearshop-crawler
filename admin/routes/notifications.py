@@ -265,6 +265,8 @@ def test_discord(request: Request, script_id: int, csrf: str = Depends(verify_cs
                 "If you're reading this, your Discord webhook is working correctly."
             ),
             "color": embed_color,
+            "footer": {"text": "RivianTrackr \u2022 Gear Shop Monitor"},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }],
     }
 
