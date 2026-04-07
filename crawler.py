@@ -848,6 +848,9 @@ def main():
 
             seen_product_ids.add(product_id)
 
+            # Remove stale product if handle was reassigned to a new product_id
+            cur.execute("DELETE FROM products WHERE handle = ? AND product_id != ?", (handle, product_id))
+
             # Upsert product
             cur.execute("""
               INSERT INTO products (product_id, handle, title, vendor, product_type, url, created_at, updated_at)
