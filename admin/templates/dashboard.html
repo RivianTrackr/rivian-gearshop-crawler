@@ -4,6 +4,30 @@
 {% block content %}
 <h2>Dashboard</h2>
 
+<article>
+  <div class="grid" style="grid-template-columns: repeat(4, 1fr); text-align: center;">
+    <div>
+      <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">Memory</small>
+      <div style="font-size: 24px; font-weight: 600;">{{ system.mem_pct }}%</div>
+      <small style="color: #6e6e73;">{{ system.mem_used_mb }} / {{ system.mem_total_mb }} MB</small>
+    </div>
+    <div>
+      <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">CPU Load</small>
+      <div style="font-size: 24px; font-weight: 600;">{{ system.load_1m }}</div>
+      <small style="color: #6e6e73;">{{ system.load_5m }} / {{ system.load_15m }} (5m/15m)</small>
+    </div>
+    <div>
+      <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">Disk</small>
+      <div style="font-size: 24px; font-weight: 600;">{{ system.disk_pct }}%</div>
+      <small style="color: #6e6e73;">{{ system.disk_used_gb }} / {{ system.disk_total_gb }} GB</small>
+    </div>
+    <div>
+      <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">Uptime</small>
+      <div style="font-size: 24px; font-weight: 600;">{{ system.uptime }}</div>
+    </div>
+  </div>
+</article>
+
 <div class="grid">
 {% for script in scripts %}
   <article>
