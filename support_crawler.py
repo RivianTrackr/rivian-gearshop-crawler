@@ -294,12 +294,27 @@ def extract_article_content(page, url: str) -> dict | None:
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
         page.wait_for_timeout(1000)
 
-        # Wait for the main heading to render
-        page.wait_for_selector("h1", timeout=10000)
+        # Wait for heading to render — try h1, fall back to h2
+        title = ""
+        try:
+            page.wait_for_selector("h1", timeout=10000)
+            title_el = page.query_selector("h1")
+            title = title_el.inner_text().strip() if title_el else ""
+        except Exception:
+            # Some pages (e.g. recall-information) may not have an h1
+            pass
 
-        # Extract title from h1
-        title_el = page.query_selector("h1")
-        title = title_el.inner_text().strip() if title_el else ""
+        # Fall back to h2 if no h1 found
+        if not title:
+            title_el = page.query_selector("h2")
+            title = title_el.inner_text().strip() if title_el else ""
+
+        # Last resort: use the page <title> tag
+        if not title:
+            title = page.title().strip()
+            # Strip common suffixes like " | Rivian"
+            if " | " in title:
+                title = title.rsplit(" | ", 1)[0].strip()
 
         # Extract article body - try common content selectors
         body_text = ""

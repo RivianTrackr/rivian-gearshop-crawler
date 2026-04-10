@@ -70,7 +70,7 @@
       <thead><tr><th>Run Time</th><th>{% if db_type == 'support' %}Articles Found{% else %}Products Found{% endif %}</th></tr></thead>
       <tbody>
         {% for row in crawl_stats %}
-        <tr><td><span class="utc-time" data-utc="{{ row.run_at }}">{{ row.run_at }}</span></td><td>{{ row.product_count }}</td></tr>
+        <tr><td><span class="utc-time" data-utc="{{ row.run_at }}">{{ row.run_at }}</span></td><td>{{ row.item_count }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

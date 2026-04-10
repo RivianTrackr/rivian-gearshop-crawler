@@ -37,13 +37,13 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
         cdb = get_crawler_db(script["db_path"])
         try:
             crawl_stats = cdb.execute(
-                "SELECT run_at, product_count FROM crawl_stats ORDER BY run_at DESC LIMIT ?",
+                "SELECT run_at, product_count AS item_count FROM crawl_stats ORDER BY run_at DESC LIMIT ?",
                 (CRAWL_STATS_LIMIT,)
             ).fetchall()
         except Exception:
             try:
                 crawl_stats = cdb.execute(
-                    "SELECT run_at, article_count as product_count FROM support_crawl_stats ORDER BY run_at DESC LIMIT ?",
+                    "SELECT run_at, article_count AS item_count FROM support_crawl_stats ORDER BY run_at DESC LIMIT ?",
                     (CRAWL_STATS_LIMIT,)
                 ).fetchall()
                 db_type = "support"

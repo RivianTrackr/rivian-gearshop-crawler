@@ -47,7 +47,11 @@
       <div role="group">
         <a href="/scripts/{{ script.id }}" role="button" class="outline">Details</a>
         <a href="/scripts/{{ script.id }}/config" role="button" class="outline secondary">Config</a>
+        {% if script.is_support %}
+        <a href="/data/{{ script.id }}/articles" role="button" class="outline secondary">Data</a>
+        {% else %}
         <a href="/data/{{ script.id }}/products" role="button" class="outline secondary">Data</a>
+        {% endif %}
       </div>
     </footer>
   </article>
