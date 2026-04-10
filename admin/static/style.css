@@ -1,14 +1,36 @@
 /* ============================================================
-   RivianTrackr Admin — Dark theme overrides for Pico CSS
+   RivianTrackr Admin — Light theme overrides for Pico CSS
+   Following CLAUDE.md light admin/internal palette
    ============================================================ */
 
 :root {
-  --pico-background-color: #0b121c;
-  --pico-card-background-color: #121e2b;
-  --pico-card-sectioning-background-color: #0f1a26;
-  --pico-primary: #fba919;
-  --pico-primary-hover: #ffbe4a;
-  --pico-primary-inverse: #0f172a;
+  --pico-background-color: #ffffff;
+  --pico-card-background-color: #f5f5f7;
+  --pico-card-sectioning-background-color: #f5f5f7;
+  --pico-primary: #0071e3;
+  --pico-primary-hover: #0077ed;
+  --pico-primary-inverse: #ffffff;
+  --pico-color: #1d1d1f;
+  --pico-muted-color: #86868b;
+  --pico-secondary: #6e6e73;
+  --pico-muted-border-color: #d2d2d7;
+  --rtg-accent: #fba919;
+  --rtg-error: #c41e3a;
+  --rtg-text-secondary: #6e6e73;
+}
+
+/* ---------- Typography ---------- */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans,
+               Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code, pre, kbd {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas,
+               'Courier New', monospace;
 }
 
 /* ---------- Brand ---------- */
@@ -21,70 +43,135 @@
 
 .brand-name {
   font-size: 20px;
+  font-weight: 600;
 }
 
 .brand-accent {
-  color: var(--pico-primary);
+  color: var(--rtg-accent);
 }
 
 /* ---------- Flash Messages ---------- */
 
 article.flash-success {
   border-left: 4px solid #34c759;
-  background: rgba(52, 199, 89, 0.12);
-  color: #6ee7a0;
+  background: #d1f4e0;
+  color: #0a5e2a;
 }
 
 article.flash-error {
   border-left: 4px solid #ff3b30;
-  background: rgba(255, 59, 48, 0.12);
-  color: #fca5a5;
+  background: #ffe5e5;
+  color: #c41e3a;
 }
 
 article.flash-info {
-  border-left: 4px solid #3b82f6;
-  background: rgba(59, 130, 246, 0.12);
-  color: #93c5fd;
+  border-left: 4px solid #60a5fa;
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 article.flash-warning {
-  border-left: 4px solid #fba919;
-  background: rgba(251, 169, 25, 0.12);
-  color: #fcd34d;
+  border-left: 4px solid var(--rtg-accent);
+  background: #fff3cd;
+  color: #856404;
 }
 
 /* ---------- Badges ---------- */
 
+mark {
+  background-color: #d1f4e0;
+  color: #0a5e2a;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 mark.error {
-  background-color: #ff3b30;
-  color: #fff;
+  background-color: #ffe5e5;
+  color: #c41e3a;
 }
 
 mark.success {
-  background-color: #34c759;
-  color: #fff;
+  background-color: #d1f4e0;
+  color: #0a5e2a;
+}
+
+mark.info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+mark.warning {
+  background-color: #fff3cd;
+  color: #856404;
 }
 
 /* ---------- Log Output ---------- */
 
 pre#log-output {
-  background: #0f1a26;
-  border: 1px solid var(--pico-muted-border-color);
+  background: #f5f5f7;
+  border: 1px solid #d2d2d7;
+  color: #1d1d1f;
   font-size: 13px;
   max-height: 600px;
   overflow-y: auto;
 }
 
-/* ---------- Destructive Button ---------- */
+/* ---------- Buttons ---------- */
 
 .btn-destructive {
-  background: #ef4444;
-  border-color: #ef4444;
+  background: #ff3b30;
+  border-color: #ff3b30;
   color: #fff;
 }
 
 .btn-destructive:hover {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: #e0342b;
+  border-color: #e0342b;
   color: #fff;
+}
+
+/* ---------- Tables ---------- */
+
+table thead th {
+  background: #f5f5f7;
+  color: #6e6e73;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+table tbody tr:hover {
+  background: #fafafa;
+}
+
+/* ---------- Inline alert (used in settings/notifications) ---------- */
+
+.alert-success {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #d1f4e0;
+  border-left: 4px solid #34c759;
+  color: #0a5e2a;
+  border-radius: 0 8px 8px 0;
+}
+
+.alert-error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #ffe5e5;
+  border-left: 4px solid #ff3b30;
+  color: #c41e3a;
+  border-radius: 0 8px 8px 0;
+}
+
+.alert-info {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #dbeafe;
+  border-left: 4px solid #60a5fa;
+  color: #1e40af;
+  border-radius: 0 8px 8px 0;
 }
