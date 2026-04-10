@@ -104,11 +104,12 @@
   <header>
     <strong>Logs</strong> (last {{ log_lines }} lines)
     <div role="group" style="float:right">
-      <a href="/scripts/{{ script.id }}/logs?lines=200" role="button" class="outline secondary" style="padding:4px 10px">200</a>
-      <a href="/scripts/{{ script.id }}/logs?lines=500" role="button" class="outline secondary" style="padding:4px 10px">500</a>
-      <a href="/scripts/{{ script.id }}/logs?lines=1000" role="button" class="outline secondary" style="padding:4px 10px">1000</a>
+      <a href="/scripts/{{ script.id }}?lines=200" role="button" class="outline secondary" style="padding:4px 10px">200</a>
+      <a href="/scripts/{{ script.id }}?lines=500" role="button" class="outline secondary" style="padding:4px 10px">500</a>
+      <a href="/scripts/{{ script.id }}?lines=1000" role="button" class="outline secondary" style="padding:4px 10px">1000</a>
+      <a href="/scripts/{{ script.id }}/logs?lines={{ log_lines }}" role="button" class="outline secondary" style="padding:4px 10px">Full View</a>
     </div>
   </header>
-  <pre style="max-height: 500px; overflow-y: auto; font-size: 0.8rem;" id="log-output">{{ logs }}</pre>
+  <pre id="log-output">{{ logs }}</pre>
 </article>
 {% endblock %}
