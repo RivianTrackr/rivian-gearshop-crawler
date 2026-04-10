@@ -10,7 +10,7 @@ from admin.auth import verify_csrf
 from admin.db import get_admin_db
 from admin.systemd import (
     install_unit_files, daemon_reload, is_unit_installed,
-    enable_service, restart_admin_service,
+    enable_service, restart_admin_service, install_admin_service,
 )
 
 logger = logging.getLogger("admin.deploy")
@@ -105,6 +105,10 @@ def _get_unit_status() -> list[dict]:
     return units
 
 
+def _admin_installed() -> bool:
+    return is_unit_installed("gearshop-admin.service")
+
+
 @router.get("/deploy", response_class=HTMLResponse)
 def deploy_page(request: Request):
     git_info = _git_status()
@@ -114,6 +118,7 @@ def deploy_page(request: Request):
         "request": request,
         "git": git_info,
         "units": units,
+        "admin_installed": _admin_installed(),
         "deploy_dir": DEPLOY_DIR,
         "csrf_token": request.state.csrf_token,
         "flash_message": None,
@@ -127,6 +132,7 @@ def _deploy_response(request: Request, flash: str, flash_type: str = "info"):
         "request": request,
         "git": git_info,
         "units": units,
+        "admin_installed": _admin_installed(),
         "deploy_dir": DEPLOY_DIR,
         "csrf_token": request.state.csrf_token,
         "flash_message": flash,
@@ -183,11 +189,25 @@ def enable_timer(request: Request, script_id: int, csrf: str = Depends(verify_cs
         return _deploy_response(request, f"Failed to enable timer: {err}", "error")
 
 
+@router.post("/deploy/install-admin", response_class=HTMLResponse)
+def install_admin(request: Request, csrf: str = Depends(verify_csrf)):
+    ok, err = install_admin_service(DEPLOY_DIR)
+    if ok:
+        return _deploy_response(request, "Admin service installed and enabled.", "success")
+    else:
+        return _deploy_response(request, f"Failed to install admin service: {err}", "error")
+
+
 @router.post("/deploy/restart-admin", response_class=HTMLResponse)
 def restart_admin(request: Request, csrf: str = Depends(verify_csrf)):
+    if not _admin_installed():
+        return _deploy_response(
+            request,
+            "Admin service is not installed yet. Click 'Install Admin Service' first.",
+            "error",
+        )
     ok, err = restart_admin_service()
     if ok:
-        # The service is restarting, so redirect to dashboard — the page will reload after restart
         return RedirectResponse("/", status_code=303)
     else:
         return _deploy_response(request, f"Failed to restart admin: {err}", "error")
