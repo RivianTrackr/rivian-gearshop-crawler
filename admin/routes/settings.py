@@ -1,12 +1,15 @@
 import os
+import shutil
+import tempfile
 import logging
 
-from fastapi import APIRouter, Request, Form, Depends
+from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from admin.db import get_admin_db
 from admin.auth import verify_password, hash_password, verify_csrf
+from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS, KNOWN_ENV_KEYS, GLOBAL_ENV_KEYS
 
 logger = logging.getLogger("admin.settings")
 
@@ -75,4 +78,134 @@ def _settings_response(request: Request, flash: str = None, flash_type: str = "i
         "csrf_token": request.state.csrf_token,
         "flash_message": flash,
         "flash_type": flash_type,
+    })
+
+
+# ---------------------- Global Config ----------------------
+
+ENV_PATH = os.path.join(os.getenv("DEPLOY_DIR", "/opt/rivian-gearshop-crawler"), ".env")
+
+
+def _parse_global_env() -> list[dict]:
+    """Parse .env and return only global keys."""
+    entries = []
+    if not os.path.exists(ENV_PATH):
+        return entries
+    with open(ENV_PATH, "r") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") and "=" not in stripped:
+                continue
+            is_commented = stripped.startswith("#")
+            if is_commented:
+                stripped = stripped.lstrip("# ")
+            if "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key in HIDDEN_CONFIG_KEYS or key not in GLOBAL_ENV_KEYS:
+                continue
+            entries.append({
+                "key": key,
+                "value": value,
+                "is_sensitive": key in SENSITIVE_KEYS,
+            })
+    return entries
+
+
+@router.get("/settings/global-config", response_class=HTMLResponse)
+def global_config_page(request: Request):
+    entries = _parse_global_env()
+    return templates.TemplateResponse("global_config.html", {
+        "request": request,
+        "entries": entries,
+        "env_path": ENV_PATH,
+        "csrf_token": request.state.csrf_token,
+        "flash_message": None,
+    })
+
+
+@router.post("/settings/global-config", response_class=HTMLResponse)
+async def global_config_save(request: Request):
+    form = await request.form()
+    csrf_token = form.get("_csrf", "")
+    expected = getattr(request.state, "csrf_token", None)
+    if not expected or csrf_token != expected:
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    keys = form.getlist("key")
+    values = form.getlist("value")
+    new_pairs = dict(zip(keys, values))
+
+    # Validate keys
+    invalid = [k for k in keys if k not in GLOBAL_ENV_KEYS]
+    if invalid:
+        entries = _parse_global_env()
+        return templates.TemplateResponse("global_config.html", {
+            "request": request,
+            "entries": entries,
+            "env_path": ENV_PATH,
+            "csrf_token": request.state.csrf_token,
+            "flash_message": f"Unknown key(s): {', '.join(invalid)}",
+            "flash_type": "error",
+        })
+
+    # Read original file, update matching keys, preserve everything else
+    lines = []
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r") as f:
+            lines = f.readlines()
+
+    written_keys = set()
+    output_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or (stripped.startswith("#") and "=" not in stripped):
+            output_lines.append(line)
+            continue
+        is_commented = stripped.startswith("#")
+        check = stripped.lstrip("# ") if is_commented else stripped
+        if "=" in check:
+            key = check.split("=", 1)[0].strip()
+            if key in new_pairs:
+                val = new_pairs[key]
+                if " " in val or '"' in val:
+                    val = f'"{val}"'
+                output_lines.append(f"{key}={val}\n")
+                written_keys.add(key)
+                continue
+        output_lines.append(line)
+
+    # Add new keys not in original
+    for key in keys:
+        if key not in written_keys and key in GLOBAL_ENV_KEYS:
+            val = new_pairs[key]
+            if " " in val or '"' in val:
+                val = f'"{val}"'
+            output_lines.append(f"{key}={val}\n")
+
+    # Atomic write
+    if os.path.exists(ENV_PATH):
+        shutil.copy2(ENV_PATH, ENV_PATH + ".bak")
+    dir_name = os.path.dirname(ENV_PATH)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=".env.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.writelines(output_lines)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, ENV_PATH)
+    except Exception:
+        os.unlink(tmp_path)
+        raise
+
+    entries = _parse_global_env()
+    return templates.TemplateResponse("global_config.html", {
+        "request": request,
+        "entries": entries,
+        "env_path": ENV_PATH,
+        "csrf_token": request.state.csrf_token,
+        "flash_message": "Global configuration saved. Restart crawlers for changes to take effect.",
+        "flash_type": "success",
     })
