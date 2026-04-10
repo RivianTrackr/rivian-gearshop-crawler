@@ -227,7 +227,23 @@ def discover_article_urls(page) -> list[dict]:
     to collect all article URLs. Returns deduplicated list of article info dicts.
     """
     log(f"Discovering articles from {SUPPORT_URL}")
-    page.goto(SUPPORT_URL, wait_until="domcontentloaded", timeout=60000)
+
+    # Retry the initial page load — this is critical and can fail on cold starts
+    last_err = None
+    for attempt in range(3):
+        try:
+            page.goto(SUPPORT_URL, wait_until="domcontentloaded", timeout=90000)
+            last_err = None
+            break
+        except Exception as e:
+            last_err = e
+            logger.warning("Attempt %d to load %s failed: %s", attempt + 1, SUPPORT_URL, e)
+            if attempt < 2:
+                page.wait_for_timeout(3000)
+
+    if last_err:
+        raise last_err
+
     page.wait_for_timeout(2000)
 
     # Collect all internal links from the support landing page
