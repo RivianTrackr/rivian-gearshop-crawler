@@ -58,7 +58,7 @@ DISCORD_WEBHOOK_URL = ""
 DISCORD_CONFIG = {
     "webhook_url": "",
     "thread_id": "",
-    "username": "RivianTrackr",
+    "username": "RivianCrawlr",
     "avatar_url": "",
     "embed_color": "#FBA919",
     "notify_new_articles": True,
@@ -112,7 +112,7 @@ def _load_notification_settings():
     if not BREVO_API_KEY:
         BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
     if not EMAIL_FROM:
-        EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianTrackr Alerts <alerts@example.com>")
+        EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianCrawlr Alerts <alerts@example.com>")
     if not EMAIL_TO:
         EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
     if not DISCORD_WEBHOOK_URL:
@@ -445,7 +445,7 @@ def send_email(subject, html):
 
 def build_changes_email(changes: dict, is_initial: bool = False, article_count: int = 0) -> str:
     """Build HTML email body for detected changes."""
-    title = "RivianTrackr Support: Initial Scan" if is_initial else "RivianTrackr Support: Changes Detected"
+    title = "RivianCrawlr Support: Initial Scan" if is_initial else "RivianCrawlr Support: Changes Detected"
     parts = [
         '<div style="font-family:system-ui,-apple-system,sans-serif;max-width:700px;">',
         f"<h2>{title}</h2>",
@@ -540,7 +540,7 @@ def build_changes_email(changes: dict, is_initial: bool = False, article_count: 
 
     parts.append(
         '<p style="color:#666;font-size:12px;">This is an automated notification from '
-        "RivianTrackr Support Article Monitor.</p>"
+        "RivianCrawlr Support Article Monitor.</p>"
     )
     parts.append("</div>")
     return "".join(parts)
@@ -577,7 +577,7 @@ def send_discord(subject, changes=None, is_heartbeat=False, heartbeat_info=None)
     embeds = []
     mentions = []
     now_iso = datetime.now(timezone.utc).isoformat()
-    embed_footer = {"text": "RivianTrackr \u2022 Support Monitor"}
+    embed_footer = {"text": "RivianCrawlr by RivianTrackr"}
 
     if is_heartbeat and heartbeat_info:
         if not cfg.get("notify_heartbeat", True):
@@ -664,7 +664,7 @@ def send_discord(subject, changes=None, is_heartbeat=False, heartbeat_info=None)
         return
 
     payload = {
-        "username": cfg.get("username") or "RivianTrackr",
+        "username": cfg.get("username") or "RivianCrawlr",
         "embeds": embeds[:10],
     }
     if cfg.get("avatar_url"):
@@ -1078,7 +1078,7 @@ def main():
 
     if is_initial or changes_exist:
         html = build_changes_email(changes, is_initial=is_initial, article_count=len(articles_data))
-        subject = "RivianTrackr Support: Initial Scan" if is_initial else "RivianTrackr Support: Changes Detected"
+        subject = "RivianCrawlr Support: Initial Scan" if is_initial else "RivianCrawlr Support: Changes Detected"
         send_email(subject, html)
         send_discord(subject, changes=changes)
 
@@ -1093,7 +1093,7 @@ def main():
         if should_send_heartbeat(conn):
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             html = f"""
-                <h2>RivianTrackr Support: Daily Heartbeat</h2>
+                <h2>RivianCrawlr Support: Daily Heartbeat</h2>
                 <p>No support article changes detected.</p>
                 <ul>
                   <li><b>Run time:</b> {ts}</li>
@@ -1102,9 +1102,9 @@ def main():
                 <p style='color:#666'>Heartbeat sent once per day at hour
                 {HEARTBEAT_UTC_HOUR:02d}:00 UTC when there are no changes.</p>
             """
-            send_email("RivianTrackr Support: Daily Heartbeat (No Changes)", html)
+            send_email("RivianCrawlr Support: Daily Heartbeat (No Changes)", html)
             send_discord(
-                "RivianTrackr Support: Daily Heartbeat",
+                "RivianCrawlr Support: Daily Heartbeat",
                 is_heartbeat=True,
                 heartbeat_info={
                     "run_time": ts,

@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS script_notifications (
 
 DEFAULT_SCRIPT = {
     "name": "rivian-gearshop-crawler",
-    "display_name": "RivianTrackr Gear Shop Crawler",
+    "display_name": "RivianCrawlr Gear Shop Crawler",
     "service_unit": "rivian-gearshop-crawler.service",
     "timer_unit": "rivian-gearshop-crawler.timer",
     "env_file_path": "/opt/rivian-gearshop-crawler/.env",
@@ -52,7 +52,7 @@ DEFAULT_SCRIPT = {
 
 SUPPORT_SCRIPT = {
     "name": "rivian-support-crawler",
-    "display_name": "RivianTrackr Support Article Crawler",
+    "display_name": "RivianCrawlr Support Article Crawler",
     "service_unit": "rivian-support-crawler.service",
     "timer_unit": "rivian-support-crawler.timer",
     "env_file_path": "/opt/rivian-gearshop-crawler/.env",

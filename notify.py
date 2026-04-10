@@ -144,7 +144,7 @@ def send_error_alert(
             "description": message,
             "color": 0xDC2626,  # red
             "fields": [],
-            "footer": {"text": "RivianTrackr \u2022 Error Alert"},
+            "footer": {"text": "RivianCrawlr by RivianTrackr"},
             "timestamp": now_iso,
         }
         if details:
@@ -161,7 +161,7 @@ def send_error_alert(
         })
 
         payload = {
-            "username": cfg.get("username", "RivianTrackr"),
+            "username": cfg.get("username", "RivianCrawlr"),
             "embeds": [embed],
         }
         if cfg.get("avatar_url"):
@@ -201,7 +201,7 @@ def send_error_alert(
             sender_name = from_addr.replace(m.group(0), "").strip()
         else:
             sender_email = from_addr
-            sender_name = "RivianTrackr Alerts"
+            sender_name = "RivianCrawlr Alerts"
 
         html = f"""
         <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px;">
@@ -219,7 +219,7 @@ def send_error_alert(
         email_payload = {
             "sender": {"email": sender_email, "name": sender_name},
             "to": [{"email": addr} for addr in to_addrs],
-            "subject": f"[ERROR] RivianTrackr: {error_type}",
+            "subject": f"[ERROR] RivianCrawlr: {error_type}",
             "htmlContent": html,
         }
         headers = {
