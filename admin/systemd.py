@@ -206,12 +206,21 @@ def install_admin_service(working_directory: str) -> tuple[bool, str]:
 
 
 def restart_admin_service() -> tuple[bool, str]:
-    """Restart the admin UI service."""
-    r = subprocess.run(
-        ["systemctl", "restart", "--no-block", "gearshop-admin.service"],
-        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
-    )
-    return r.returncode == 0, r.stderr
+    """Restart the admin UI service after a short delay.
+
+    Uses a detached shell process that sleeps 1 second before restarting,
+    giving the HTTP response time to complete before systemd kills uvicorn.
+    """
+    try:
+        subprocess.Popen(
+            ["bash", "-c", "sleep 1 && systemctl restart gearshop-admin.service"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 def get_journal_logs(unit: str, lines: int = 100, since: str | None = None) -> str:
