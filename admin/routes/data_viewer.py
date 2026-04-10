@@ -18,6 +18,7 @@ templates = Jinja2Templates(
 
 PAGE_SIZE = 50
 VARIANT_HISTORY_LIMIT = 100
+SNAPSHOT_HISTORY_LIMIT = 100
 
 # SQL for full product+variant+latest snapshot export
 _EXPORT_SQL = """
@@ -248,6 +249,178 @@ def crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
 
         stats = cdb.execute(
             "SELECT * FROM crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
+            (PAGE_SIZE, offset),
+        ).fetchall()
+    finally:
+        cdb.close()
+
+    return templates.TemplateResponse("crawl_history.html", {
+        "request": request,
+        "script": script,
+        "stats": stats,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "csrf_token": request.state.csrf_token,
+    })
+
+
+# ---------------------- Support Article Routes ----------------------
+
+def _is_support_db(db_path: str) -> bool:
+    """Check if the database contains support article tables."""
+    cdb = get_crawler_db(db_path)
+    try:
+        tables = {r[0] for r in cdb.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        return "support_articles" in tables
+    except Exception:
+        return False
+    finally:
+        cdb.close()
+
+
+@router.get("/data/{script_id}/articles", response_class=HTMLResponse)
+def articles_list(request: Request, script_id: int,
+                  page: int = Query(1, ge=1),
+                  q: str = Query("")):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    cdb = get_crawler_db(script["db_path"])
+    try:
+        if q:
+            count_row = cdb.execute(
+                "SELECT COUNT(*) as cnt FROM support_articles WHERE title LIKE ? OR slug LIKE ?",
+                (f"%{q}%", f"%{q}%"),
+            ).fetchone()
+        else:
+            count_row = cdb.execute("SELECT COUNT(*) as cnt FROM support_articles").fetchone()
+
+        total = count_row["cnt"]
+        total_pages = max(1, math.ceil(total / PAGE_SIZE))
+        offset = (page - 1) * PAGE_SIZE
+
+        if q:
+            articles = cdb.execute(
+                """SELECT a.*,
+                          (SELECT COUNT(*) FROM article_snapshots s WHERE s.article_id = a.id) as snapshot_count
+                   FROM support_articles a
+                   WHERE a.title LIKE ? OR a.slug LIKE ?
+                   ORDER BY a.updated_at DESC
+                   LIMIT ? OFFSET ?""",
+                (f"%{q}%", f"%{q}%", PAGE_SIZE, offset),
+            ).fetchall()
+        else:
+            articles = cdb.execute(
+                """SELECT a.*,
+                          (SELECT COUNT(*) FROM article_snapshots s WHERE s.article_id = a.id) as snapshot_count
+                   FROM support_articles a
+                   ORDER BY a.updated_at DESC
+                   LIMIT ? OFFSET ?""",
+                (PAGE_SIZE, offset),
+            ).fetchall()
+    finally:
+        cdb.close()
+
+    return templates.TemplateResponse("data_articles.html", {
+        "request": request,
+        "script": script,
+        "articles": articles,
+        "page": page,
+        "total_pages": total_pages,
+        "total": total,
+        "q": q,
+        "csrf_token": request.state.csrf_token,
+    })
+
+
+@router.get("/data/{script_id}/articles/{article_id}", response_class=HTMLResponse)
+def article_detail(request: Request, script_id: int, article_id: int):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    cdb = get_crawler_db(script["db_path"])
+    try:
+        article = cdb.execute(
+            "SELECT * FROM support_articles WHERE id = ?", (article_id,)
+        ).fetchone()
+        if not article:
+            return RedirectResponse(f"/data/{script_id}/articles", status_code=303)
+
+        snapshots = cdb.execute(
+            """SELECT * FROM article_snapshots
+               WHERE article_id = ?
+               ORDER BY crawled_at DESC
+               LIMIT ?""",
+            (article_id, SNAPSHOT_HISTORY_LIMIT),
+        ).fetchall()
+    finally:
+        cdb.close()
+
+    # Build diffs between consecutive snapshots
+    snapshot_diffs = []
+    for i, snap in enumerate(snapshots):
+        diff_html = ""
+        if i < len(snapshots) - 1:
+            older = snapshots[i + 1]
+            if snap["body_hash"] != older["body_hash"]:
+                import difflib
+                from html import escape as html_escape
+                old_lines = older["body_text"].splitlines()
+                new_lines = snap["body_text"].splitlines()
+                diff = list(difflib.unified_diff(old_lines, new_lines, lineterm="", n=2))
+                parts = []
+                for line in diff:
+                    if line.startswith("---") or line.startswith("+++"):
+                        continue
+                    if line.startswith("+"):
+                        parts.append(f'<div style="background:#d4edda;padding:2px 6px;">+ {html_escape(line[1:])}</div>')
+                    elif line.startswith("-"):
+                        parts.append(f'<div style="background:#f8d7da;padding:2px 6px;">- {html_escape(line[1:])}</div>')
+                    elif line.startswith("@@"):
+                        parts.append(f'<div style="color:#6b7280;padding:2px 6px;">{html_escape(line)}</div>')
+                diff_html = "".join(parts)
+            title_changed = snap["title"] != older["title"]
+            url_changed = snap["url"] != older["url"]
+        else:
+            title_changed = False
+            url_changed = False
+
+        snapshot_diffs.append({
+            "snapshot": snap,
+            "diff_html": diff_html,
+            "title_changed": title_changed,
+            "url_changed": url_changed,
+        })
+
+    return templates.TemplateResponse("data_article_detail.html", {
+        "request": request,
+        "script": script,
+        "article": article,
+        "snapshot_diffs": snapshot_diffs,
+        "csrf_token": request.state.csrf_token,
+    })
+
+
+@router.get("/data/{script_id}/support-crawl-history", response_class=HTMLResponse)
+def support_crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    cdb = get_crawler_db(script["db_path"])
+    try:
+        count_row = cdb.execute("SELECT COUNT(*) as cnt FROM support_crawl_stats").fetchone()
+        total = count_row["cnt"]
+        total_pages = max(1, math.ceil(total / PAGE_SIZE))
+        offset = (page - 1) * PAGE_SIZE
+
+        stats = cdb.execute(
+            "SELECT * FROM support_crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
             (PAGE_SIZE, offset),
         ).fetchall()
     finally:

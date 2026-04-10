@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Articles — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Support Articles — {{ script.display_name }}</h2>
+  <p>{{ total }} articles total</p>
+</hgroup>
+
+<form method="get" action="/data/{{ script.id }}/articles" style="margin-bottom: 1rem;">
+  <div role="group">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by title or slug...">
+    <button type="submit">Search</button>
+  </div>
+</form>
+
+<div style="overflow-x: auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Slug</th>
+        <th>Category</th>
+        <th>Status</th>
+        <th>Snapshots</th>
+        <th>Last Updated</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in articles %}
+      <tr>
+        <td>{{ a.title or '—' }}</td>
+        <td><code>{{ a.slug }}</code></td>
+        <td>{{ a.category or '—' }}</td>
+        <td>
+          {% if a.removed %}
+            <mark class="error">Removed</mark>
+          {% else %}
+            <mark>Active</mark>
+          {% endif %}
+        </td>
+        <td>{{ a.snapshot_count }}</td>
+        <td><span class="utc-time" data-utc="{{ a.updated_at }}">{{ a.updated_at }}</span></td>
+        <td><a href="/data/{{ script.id }}/articles/{{ a.id }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<nav style="text-align: center;">
+  {% if page > 1 %}
+    <a href="/data/{{ script.id }}/articles?page={{ page - 1 }}&q={{ q }}">&larr; Previous</a>
+  {% endif %}
+  <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="/data/{{ script.id }}/articles?page={{ page + 1 }}&q={{ q }}">Next &rarr;</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+<p>
+  <a href="/data/{{ script.id }}/support-crawl-history">View Crawl History</a> |
+  <a href="/scripts/{{ script.id }}">&larr; Back to script detail</a>
+</p>
+{% endblock %}

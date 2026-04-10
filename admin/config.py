@@ -48,6 +48,9 @@ KNOWN_ENV_KEYS = {
     "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG", "JSON_OUT_PATH",
     "ADMIN_SECRET_KEY", "ADMIN_PORT", "ADMIN_DB_PATH",
     "SCRIPT_NAME",
+    # Support crawler
+    "SUPPORT_URL", "SUPPORT_DB_PATH", "SUPPORT_SCRIPT_NAME",
+    "SUPPORT_ARTICLE_DELAY", "SUPPORT_MAX_ARTICLES",
 }
 
 # Keys whose values should be masked in the UI

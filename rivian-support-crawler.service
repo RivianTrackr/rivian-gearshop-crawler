@@ -1,0 +1,14 @@
+[Unit]
+Description=Rivian Support Article Crawler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/rivian-gearshop-crawler
+ExecStart=/opt/rivian-gearshop-crawler/venv/bin/python3 /opt/rivian-gearshop-crawler/support_crawler.py
+Environment=PATH=/opt/rivian-gearshop-crawler/venv/bin:/usr/bin:/bin
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal

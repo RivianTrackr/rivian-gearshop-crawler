@@ -30,8 +30,9 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
     timer_active = get_timer_active(script["timer_unit"]) if script["timer_unit"] else False
     logs = get_journal_logs(script["service_unit"], lines=lines)
 
-    # Get crawl stats if DB exists
+    # Get crawl stats if DB exists (gearshop uses crawl_stats, support uses support_crawl_stats)
     crawl_stats = []
+    db_type = "gearshop"
     if script["db_path"] and os.path.exists(script["db_path"]):
         cdb = get_crawler_db(script["db_path"])
         try:
@@ -40,7 +41,14 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
                 (CRAWL_STATS_LIMIT,)
             ).fetchall()
         except Exception:
-            pass
+            try:
+                crawl_stats = cdb.execute(
+                    "SELECT run_at, article_count as product_count FROM support_crawl_stats ORDER BY run_at DESC LIMIT ?",
+                    (CRAWL_STATS_LIMIT,)
+                ).fetchall()
+                db_type = "support"
+            except Exception:
+                pass
         finally:
             cdb.close()
 
@@ -52,6 +60,7 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
         "logs": logs,
         "log_lines": lines,
         "crawl_stats": crawl_stats,
+        "db_type": db_type,
         "csrf_token": request.state.csrf_token,
     })
 

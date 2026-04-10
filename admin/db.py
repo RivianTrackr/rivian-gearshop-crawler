@@ -50,6 +50,17 @@ DEFAULT_SCRIPT = {
     "description": "Monitors Rivian Gear Shop for inventory changes and sends email alerts.",
 }
 
+SUPPORT_SCRIPT = {
+    "name": "rivian-support-crawler",
+    "display_name": "RivianTrackr Support Article Crawler",
+    "service_unit": "rivian-support-crawler.service",
+    "timer_unit": "rivian-support-crawler.timer",
+    "env_file_path": "/opt/rivian-gearshop-crawler/.env",
+    "db_path": "/opt/rivian-gearshop-crawler/support.db",
+    "working_directory": "/opt/rivian-gearshop-crawler",
+    "description": "Monitors Rivian Support articles for content changes and sends email alerts.",
+}
+
 
 def get_admin_db() -> sqlite3.Connection:
     conn = sqlite3.connect(ADMIN_DB_PATH)
@@ -88,28 +99,31 @@ def init_admin_db():
         print("  Change this password immediately after login!")
         print("=" * 50)
 
-    # Seed default managed script if none exist
-    row = conn.execute("SELECT COUNT(*) as cnt FROM managed_scripts").fetchone()
-    if row["cnt"] == 0:
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
-            """INSERT INTO managed_scripts
-               (name, display_name, service_unit, timer_unit,
-                env_file_path, db_path, working_directory, description, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                DEFAULT_SCRIPT["name"],
-                DEFAULT_SCRIPT["display_name"],
-                DEFAULT_SCRIPT["service_unit"],
-                DEFAULT_SCRIPT["timer_unit"],
-                DEFAULT_SCRIPT["env_file_path"],
-                DEFAULT_SCRIPT["db_path"],
-                DEFAULT_SCRIPT["working_directory"],
-                DEFAULT_SCRIPT["description"],
-                now,
-            ),
-        )
-        conn.commit()
+    # Seed default managed scripts if they don't exist
+    now = datetime.now(timezone.utc).isoformat()
+    for script_def in (DEFAULT_SCRIPT, SUPPORT_SCRIPT):
+        existing = conn.execute(
+            "SELECT 1 FROM managed_scripts WHERE name = ?", (script_def["name"],)
+        ).fetchone()
+        if not existing:
+            conn.execute(
+                """INSERT INTO managed_scripts
+                   (name, display_name, service_unit, timer_unit,
+                    env_file_path, db_path, working_directory, description, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    script_def["name"],
+                    script_def["display_name"],
+                    script_def["service_unit"],
+                    script_def["timer_unit"],
+                    script_def["env_file_path"],
+                    script_def["db_path"],
+                    script_def["working_directory"],
+                    script_def["description"],
+                    now,
+                ),
+            )
+    conn.commit()
 
     # Ensure script_notifications table exists (handles upgrades)
     conn.execute("""

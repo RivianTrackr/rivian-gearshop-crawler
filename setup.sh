@@ -22,6 +22,10 @@ mkdir -p "${INSTALL_DIR}"
 echo "==> Copying project files..."
 cp "${REPO_DIR}/crawler.py" "${INSTALL_DIR}/"
 cp "${REPO_DIR}/availability.py" "${INSTALL_DIR}/"
+cp "${REPO_DIR}/notify.py" "${INSTALL_DIR}/"
+cp "${REPO_DIR}/migrations.py" "${INSTALL_DIR}/"
+cp "${REPO_DIR}/support_crawler.py" "${INSTALL_DIR}/"
+cp "${REPO_DIR}/support_migrations.py" "${INSTALL_DIR}/"
 cp "${REPO_DIR}/requirements.txt" "${INSTALL_DIR}/"
 cp -r "${REPO_DIR}/admin" "${INSTALL_DIR}/"
 cp "${REPO_DIR}/.env" "${INSTALL_DIR}/"
@@ -39,6 +43,8 @@ echo "==> Installing Playwright Chromium browser..."
 echo "==> Installing systemd service and timer..."
 cp "${REPO_DIR}/rivian-gearshop-crawler.service" /etc/systemd/system/
 cp "${REPO_DIR}/rivian-gearshop-crawler.timer" /etc/systemd/system/
+cp "${REPO_DIR}/rivian-support-crawler.service" /etc/systemd/system/
+cp "${REPO_DIR}/rivian-support-crawler.timer" /etc/systemd/system/
 
 echo "==> Installing admin UI service..."
 cp "${REPO_DIR}/gearshop-admin.service" /etc/systemd/system/
@@ -62,6 +68,8 @@ systemctl enable nginx
 systemctl daemon-reload
 systemctl enable rivian-gearshop-crawler.timer
 systemctl start rivian-gearshop-crawler.timer
+systemctl enable rivian-support-crawler.timer
+systemctl start rivian-support-crawler.timer
 systemctl enable gearshop-admin.service
 systemctl start gearshop-admin.service
 
@@ -77,12 +85,15 @@ echo "  Local:        http://127.0.0.1:8111"
 echo "  Config:       ${INSTALL_DIR}/.env"
 echo ""
 echo "  Useful commands:"
-echo "    systemctl status rivian-gearshop-crawler.timer   # check timer"
+echo "    systemctl status rivian-gearshop-crawler.timer   # check gearshop timer"
+echo "    systemctl status rivian-support-crawler.timer    # check support timer"
 echo "    systemctl status gearshop-admin.service          # check admin UI"
 echo "    systemctl list-timers --all                      # list all timers"
-echo "    journalctl -u rivian-gearshop-crawler -f         # follow crawler logs"
+echo "    journalctl -u rivian-gearshop-crawler -f         # follow gearshop logs"
+echo "    journalctl -u rivian-support-crawler -f          # follow support logs"
 echo "    journalctl -u gearshop-admin -f                  # follow admin UI logs"
-echo "    systemctl start rivian-gearshop-crawler.service  # run crawler manually"
+echo "    systemctl start rivian-gearshop-crawler.service  # run gearshop manually"
+echo "    systemctl start rivian-support-crawler.service   # run support manually"
 echo ""
 echo "  NOTE: Check admin UI logs for the initial admin password:"
 echo "    journalctl -u gearshop-admin | head -20"
