@@ -179,6 +179,32 @@ def install_unit_files(working_directory: str, service_unit: str, timer_unit: st
     return True, ""
 
 
+def install_admin_service(working_directory: str) -> tuple[bool, str]:
+    """Install the admin service unit file, reload, and enable it."""
+    import shutil
+    unit = "gearshop-admin.service"
+    src = os.path.join(working_directory, unit)
+    dst = os.path.join("/etc/systemd/system", unit)
+
+    if not os.path.exists(src):
+        return False, f"{unit} not found in {working_directory}"
+
+    try:
+        shutil.copy2(src, dst)
+    except Exception as e:
+        return False, f"Failed to copy {unit}: {e}"
+
+    ok, err = daemon_reload()
+    if not ok:
+        return False, f"daemon-reload failed: {err}"
+
+    ok, err = enable_service(unit)
+    if not ok:
+        return False, f"Failed to enable {unit}: {err}"
+
+    return True, ""
+
+
 def restart_admin_service() -> tuple[bool, str]:
     """Restart the admin UI service."""
     r = subprocess.run(

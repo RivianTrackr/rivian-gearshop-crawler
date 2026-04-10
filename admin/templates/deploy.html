@@ -30,21 +30,47 @@
     </tr>
   </table>
   <footer>
+    <form method="post" action="/deploy/pull" style="margin:0">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit">Pull Latest</button>
+    </form>
+  </footer>
+</article>
+
+<article>
+  <header><strong>Admin UI Service</strong></header>
+  <table>
+    <tr>
+      <td>Service</td>
+      <td><code>gearshop-admin.service</code></td>
+      <td>
+        {% if admin_installed %}
+          <mark class="success">Installed</mark>
+        {% else %}
+          <mark class="error">Not installed</mark>
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+  <footer>
     <div role="group">
-      <form method="post" action="/deploy/pull" style="margin:0">
+      {% if not admin_installed %}
+      <form method="post" action="/deploy/install-admin" style="margin:0">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <button type="submit">Pull Latest</button>
+        <button type="submit">Install Admin Service</button>
       </form>
+      {% else %}
       <form method="post" action="/deploy/restart-admin" style="margin:0">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <button type="submit" class="outline secondary">Restart Admin UI</button>
       </form>
+      {% endif %}
     </div>
   </footer>
 </article>
 
 <article>
-  <header><strong>Systemd Services</strong></header>
+  <header><strong>Crawler Services</strong></header>
   <p>Install and enable systemd units so crawlers run on a schedule and can be managed from this panel.</p>
 
   <div style="overflow-x: auto;">
