@@ -227,7 +227,7 @@ def discover_article_urls(page) -> list[dict]:
     to collect all article URLs. Returns deduplicated list of article info dicts.
     """
     log(f"Discovering articles from {SUPPORT_URL}")
-    page.goto(SUPPORT_URL, wait_until="networkidle", timeout=60000)
+    page.goto(SUPPORT_URL, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(2000)
 
     # Collect all internal links from the support landing page
@@ -274,7 +274,7 @@ def discover_article_urls(page) -> list[dict]:
         cat_name = category_from_referrer(cat_url)
         log(f"  Category: {cat_name} ({cat_url})")
         try:
-            page.goto(cat_url, wait_until="networkidle", timeout=30000)
+            page.goto(cat_url, wait_until="domcontentloaded", timeout=30000)
             page.wait_for_timeout(1000)
             _collect_articles_from_page(page, cat_name)
         except Exception as e:
@@ -291,7 +291,7 @@ def extract_article_content(page, url: str) -> dict | None:
     Returns dict with title, body_text, or None on failure.
     """
     try:
-        page.goto(url, wait_until="networkidle", timeout=30000)
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
         page.wait_for_timeout(1000)
 
         # Wait for the main heading to render
