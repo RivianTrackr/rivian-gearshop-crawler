@@ -9,6 +9,7 @@ from admin.db import get_crawler_db
 from admin.systemd import (
     get_service_status, get_timer_active,
     start_service, stop_service, get_journal_logs,
+    enable_service, disable_service, is_unit_installed,
 )
 from admin.routes.helpers import get_script as _get_script
 
@@ -52,11 +53,14 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
         finally:
             cdb.close()
 
+    units_installed = is_unit_installed(script["service_unit"])
+
     return templates.TemplateResponse("script_detail.html", {
         "request": request,
         "script": script,
         "status": status,
         "timer_active": timer_active,
+        "units_installed": units_installed,
         "logs": logs,
         "log_lines": lines,
         "crawl_stats": crawl_stats,
@@ -90,6 +94,22 @@ def script_restart(request: Request, script_id: int, csrf: str = Depends(verify_
         start_service(script["service_unit"])
         if script["timer_unit"]:
             start_service(script["timer_unit"])
+    return RedirectResponse(f"/scripts/{script_id}", status_code=303)
+
+
+@router.post("/scripts/{script_id}/enable-timer")
+def script_enable_timer(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
+    script = _get_script(script_id)
+    if script and script["timer_unit"]:
+        enable_service(script["timer_unit"])
+    return RedirectResponse(f"/scripts/{script_id}", status_code=303)
+
+
+@router.post("/scripts/{script_id}/disable-timer")
+def script_disable_timer(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
+    script = _get_script(script_id)
+    if script and script["timer_unit"]:
+        disable_service(script["timer_unit"])
     return RedirectResponse(f"/scripts/{script_id}", status_code=303)
 
 
