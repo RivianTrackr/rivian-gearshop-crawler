@@ -60,7 +60,7 @@ DISCORD_WEBHOOK_URL = ""
 DISCORD_CONFIG = {
     "webhook_url": "",
     "thread_id": "",
-    "username": "RivianTrackr",
+    "username": "RivianCrawlr",
     "avatar_url": "",
     "embed_color": "#FBA919",
     "notify_new_products": True,
@@ -117,7 +117,7 @@ def _load_notification_settings():
     if not BREVO_API_KEY:
         BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
     if not EMAIL_FROM:
-        EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianTrackr Alerts <alerts@example.com>")
+        EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianCrawlr Alerts <alerts@example.com>")
     if not EMAIL_TO:
         EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
     if not DISCORD_WEBHOOK_URL:
@@ -443,7 +443,7 @@ def send_email(subject, html):
         retry_queue.enqueue("email", send_email, args=(subject, html))
 
 def build_email_fixed(is_initial, diffs, new_products, removed_products, initial_rows=None):
-    title = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
+    title = "RivianCrawlr: Initial Catalog" if is_initial else "RivianCrawlr: Changes Detected"
     parts = [f"<h2>{title}</h2>"]
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     parts.append(f"<p><small>Generated {ts} UTC</small></p>")
@@ -536,7 +536,7 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
     embeds = []
     mentions = []
     now_iso = datetime.now(timezone.utc).isoformat()
-    embed_footer = {"text": "RivianTrackr \u2022 Gear Shop Monitor"}
+    embed_footer = {"text": "RivianCrawlr by RivianTrackr"}
 
     if is_heartbeat and heartbeat_info:
         if not cfg.get("notify_heartbeat", True):
@@ -625,7 +625,7 @@ def send_discord(subject, diffs=None, new_products=None, removed_products=None, 
 
     # Discord limits: max 10 embeds, 6000 total chars
     payload = {
-        "username": cfg.get("username") or "RivianTrackr",
+        "username": cfg.get("username") or "RivianCrawlr",
         "embeds": embeds[:10],
     }
 
@@ -1096,7 +1096,7 @@ def main():
             removed_products=removed_products_report_block,
             initial_rows=initial_rows_for_email
         )
-        subject = "RivianTrackr: Initial Catalog" if is_initial else "RivianTrackr: Changes Detected"
+        subject = "RivianCrawlr: Initial Catalog" if is_initial else "RivianCrawlr: Changes Detected"
         send_email(subject, html)
         send_discord(
             subject,
@@ -1116,7 +1116,7 @@ def main():
         if should_send_heartbeat(conn):
             ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             html = f"""
-                <h2>RivianTrackr: Daily Heartbeat</h2>
+                <h2>RivianCrawlr: Daily Heartbeat</h2>
                 <p>No catalog changes detected in the last checks.</p>
                 <ul>
                   <li><b>Run time:</b> {ts}</li>
@@ -1125,9 +1125,9 @@ def main():
                 </ul>
                 <p style='color:#666'>Heartbeat is sent once per day at hour {HEARTBEAT_UTC_HOUR:02d}:00 UTC when there are no changes.</p>
             """
-            send_email("RivianTrackr: Daily Heartbeat (No Changes)", html)
+            send_email("RivianCrawlr: Daily Heartbeat (No Changes)", html)
             send_discord(
-                "RivianTrackr: Daily Heartbeat",
+                "RivianCrawlr: Daily Heartbeat",
                 is_heartbeat=True,
                 heartbeat_info={
                     "run_time": ts,

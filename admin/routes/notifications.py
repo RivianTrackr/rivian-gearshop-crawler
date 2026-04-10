@@ -192,7 +192,7 @@ def test_email(request: Request, script_id: int, csrf: str = Depends(verify_csrf
 
     cfg = notif["config"]
     brevo_key = cfg.get("brevo_api_key", "")
-    email_from = cfg.get("email_from") or "RivianTrackr Alerts <alerts@riviantrackr.com>"
+    email_from = cfg.get("email_from") or "RivianCrawlr Alerts <alerts@riviantrackr.com>"
     email_to_str = cfg.get("email_to", "")
 
     if not brevo_key:
@@ -209,11 +209,11 @@ def test_email(request: Request, script_id: int, csrf: str = Depends(verify_csrf
         sender_name = email_from.replace(m.group(0), "").strip()
     else:
         sender_email = email_from
-        sender_name = "RivianTrackr"
+        sender_name = "RivianCrawlr"
 
     html = """
-    <h2>RivianTrackr: Test Email</h2>
-    <p>This is a test email from your RivianTrackr admin panel.</p>
+    <h2>RivianCrawlr: Test Email</h2>
+    <p>This is a test email from your RivianCrawlr admin panel.</p>
     <p>Script: <strong>{}</strong></p>
     <p>If you're reading this, your email configuration is working correctly.</p>
     """.format(script["display_name"])
@@ -221,7 +221,7 @@ def test_email(request: Request, script_id: int, csrf: str = Depends(verify_csrf
     payload = {
         "sender": {"email": sender_email, "name": sender_name},
         "to": [{"email": addr} for addr in recipients],
-        "subject": f"RivianTrackr: Test Email — {script['display_name']}",
+        "subject": f"RivianCrawlr: Test Email — {script['display_name']}",
         "htmlContent": html,
     }
     headers = {"accept": "application/json", "api-key": brevo_key, "content-type": "application/json"}
@@ -256,16 +256,16 @@ def test_discord(request: Request, script_id: int, csrf: str = Depends(verify_cs
     embed_color = _parse_hex_color(cfg.get("embed_color", "#FBA919"))
 
     payload = {
-        "username": cfg.get("username") or "RivianTrackr",
+        "username": cfg.get("username") or "RivianCrawlr",
         "embeds": [{
-            "title": "RivianTrackr: Test Notification",
+            "title": "RivianCrawlr: Test Notification",
             "description": (
-                f"This is a test notification from your RivianTrackr admin panel.\n"
+                f"This is a test notification from your RivianCrawlr admin panel.\n"
                 f"**Script:** {script['display_name']}\n"
                 "If you're reading this, your Discord webhook is working correctly."
             ),
             "color": embed_color,
-            "footer": {"text": "RivianTrackr \u2022 Gear Shop Monitor"},
+            "footer": {"text": "RivianCrawlr by RivianTrackr"},
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }],
     }

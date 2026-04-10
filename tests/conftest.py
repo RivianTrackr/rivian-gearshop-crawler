@@ -1,4 +1,4 @@
-"""Shared test fixtures for the RivianTrackr test suite."""
+"""Shared test fixtures for the RivianCrawlr test suite."""
 
 import os
 import sqlite3
