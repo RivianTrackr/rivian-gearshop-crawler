@@ -110,11 +110,20 @@
             {% endif %}
           </td>
           <td>
-            <div role="group" style="margin:0">
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
               {% if not unit.service_installed or not unit.timer_installed %}
               <form method="post" action="/deploy/install-units/{{ unit.id }}" style="margin:0">
                 <input type="hidden" name="_csrf" value="{{ csrf_token }}">
                 <button type="submit" class="outline" style="padding:4px 12px">Install Units</button>
+              </form>
+              {% else %}
+              <form method="post" action="/deploy/run-now/{{ unit.id }}" style="margin:0">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline" style="padding:4px 12px">Run Now</button>
+              </form>
+              <form method="post" action="/deploy/restart-crawler/{{ unit.id }}" style="margin:0" data-confirm="This will restart {{ unit.display_name }} (stop timer, run, restart timer). Continue?">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline secondary" style="padding:4px 12px">Restart</button>
               </form>
               {% endif %}
               {% if unit.timer_active %}
