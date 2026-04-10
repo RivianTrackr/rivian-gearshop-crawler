@@ -208,6 +208,10 @@ def restart_admin(request: Request, csrf: str = Depends(verify_csrf)):
         )
     ok, err = restart_admin_service()
     if ok:
-        return RedirectResponse("/", status_code=303)
+        return _deploy_response(
+            request,
+            "Admin UI is restarting. The page will briefly go down — refresh in a few seconds.",
+            "success",
+        )
     else:
         return _deploy_response(request, f"Failed to restart admin: {err}", "error")
