@@ -11,6 +11,7 @@ from admin.db import get_admin_db
 from admin.systemd import (
     install_unit_files, daemon_reload, is_unit_installed,
     enable_service, disable_service, get_timer_active,
+    start_service, stop_service,
     restart_admin_service, install_admin_service,
 )
 
@@ -228,6 +229,48 @@ def disable_timer(request: Request, script_id: int, csrf: str = Depends(verify_c
         return _deploy_response(request, f"Timer {row['timer_unit']} disabled.", "success")
     else:
         return _deploy_response(request, f"Failed to disable timer: {err}", "error")
+
+
+@router.post("/deploy/run-now/{script_id}", response_class=HTMLResponse)
+def run_now(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
+    conn = get_admin_db()
+    try:
+        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return _deploy_response(request, "Script not found.", "error")
+
+    ok, err = start_service(row["service_unit"])
+    if ok:
+        return _deploy_response(request, f"Started {row['display_name']}.", "success")
+    else:
+        return _deploy_response(request, f"Failed to start: {err}", "error")
+
+
+@router.post("/deploy/restart-crawler/{script_id}", response_class=HTMLResponse)
+def restart_crawler(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
+    conn = get_admin_db()
+    try:
+        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return _deploy_response(request, "Script not found.", "error")
+
+    # Stop timer, run service, restart timer
+    if row["timer_unit"]:
+        stop_service(row["timer_unit"])
+    ok, err = start_service(row["service_unit"])
+    if row["timer_unit"]:
+        start_service(row["timer_unit"])
+
+    if ok:
+        return _deploy_response(request, f"Restarted {row['display_name']}.", "success")
+    else:
+        return _deploy_response(request, f"Failed to restart: {err}", "error")
 
 
 @router.post("/deploy/install-admin", response_class=HTMLResponse)
