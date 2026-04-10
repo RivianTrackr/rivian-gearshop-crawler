@@ -53,5 +53,26 @@ KNOWN_ENV_KEYS = {
     "SUPPORT_ARTICLE_DELAY", "SUPPORT_MAX_ARTICLES",
 }
 
+# Keys shared across all crawlers (shown on global settings page)
+GLOBAL_ENV_KEYS = {
+    "BREVO_API_KEY", "EMAIL_FROM", "EMAIL_TO",
+    "DISCORD_WEBHOOK_URL", "ERROR_DISCORD_WEBHOOK_URL",
+    "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG",
+    "ADMIN_PORT", "ADMIN_DB_PATH",
+}
+
+# Keys specific to the gear shop crawler
+GEARSHOP_ENV_KEYS = {
+    "SITE_ROOT", "COLLECTION_URL", "DB_PATH",
+    "PRODUCT_DELAY", "MAX_SCROLL_SECONDS", "AVAIL_HTML_MAX",
+    "JSON_OUT_PATH", "SCRIPT_NAME",
+}
+
+# Keys specific to the support crawler
+SUPPORT_ENV_KEYS = {
+    "SUPPORT_URL", "SUPPORT_DB_PATH", "SUPPORT_SCRIPT_NAME",
+    "SUPPORT_ARTICLE_DELAY", "SUPPORT_MAX_ARTICLES",
+}
+
 # Keys whose values should be masked in the UI
 SENSITIVE_KEYS = {"BREVO_API_KEY", "ADMIN_SECRET_KEY", "DISCORD_WEBHOOK_URL"}

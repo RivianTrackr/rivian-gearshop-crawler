@@ -11,6 +11,32 @@
 {% endif %}
 
 <article>
+  <header><strong>Global Configuration</strong></header>
+  <p>Shared settings used by all crawlers: email API key, sender, recipients, Discord webhook, and admin options.</p>
+  <a href="/settings/global-config" role="button" class="outline">Edit Global Config</a>
+</article>
+
+<article>
+  <header><strong>Per-Crawler Configuration</strong></header>
+  <p>Each crawler has its own settings (URLs, database paths, throttling). Edit them from the script detail page.</p>
+  {% for script in scripts %}
+  <a href="/scripts/{{ script.id }}/config" role="button" class="outline secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;">
+    {{ script.display_name }} Config
+  </a>
+  {% endfor %}
+</article>
+
+<article>
+  <header><strong>Notifications</strong></header>
+  <p>Email and Discord notification settings are configured per script.</p>
+  {% for script in scripts %}
+  <a href="/scripts/{{ script.id }}/notifications" role="button" class="outline secondary" style="margin-right: 0.5rem; margin-bottom: 0.5rem;">
+    {{ script.display_name }} Notifications
+  </a>
+  {% endfor %}
+</article>
+
+<article>
   <header><strong>Change Password</strong></header>
   <form method="post" action="/settings/password">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -26,15 +52,5 @@
 
     <button type="submit">Change Password</button>
   </form>
-</article>
-
-<article>
-  <header><strong>Notifications</strong></header>
-  <p>Email and Discord notification settings are now configured per script. Visit a script's detail page and click <strong>Notifications</strong> to configure.</p>
-  {% for script in scripts %}
-  <a href="/scripts/{{ script.id }}/notifications" role="button" class="outline" style="margin-right: 0.5rem; margin-bottom: 0.5rem;">
-    {{ script.display_name }} Notifications
-  </a>
-  {% endfor %}
 </article>
 {% endblock %}

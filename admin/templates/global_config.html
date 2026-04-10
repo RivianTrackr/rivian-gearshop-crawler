@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Global Configuration{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Global Configuration</h2>
+  <p>Shared settings used by all crawlers <small>({{ env_path }})</small></p>
+</hgroup>
+
+{% if flash_message %}
+<article class="alert-{{ flash_type|default('info') }}">
+  {{ flash_message }}
+</article>
+{% endif %}
+
+<form method="post" action="/settings/global-config">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+  <table>
+    <thead>
+      <tr><th>Key</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      <tr>
+        <td>
+          <input type="hidden" name="key" value="{{ entry.key }}">
+          <code>{{ entry.key }}</code>
+        </td>
+        <td>
+          {% if entry.is_sensitive %}
+            <input type="password" name="value" value="{{ entry.value }}"
+                   style="font-family: monospace;" autocomplete="off">
+          {% else %}
+            <input type="text" name="value" value="{{ entry.value }}"
+                   style="font-family: monospace;">
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="submit">Save Global Settings</button>
+</form>
+
+<p><a href="/settings">&larr; Back to settings</a></p>
+{% endblock %}

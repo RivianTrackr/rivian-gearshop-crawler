@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS, KNOWN_ENV_KEYS
+from admin.config import HIDDEN_CONFIG_KEYS, SENSITIVE_KEYS, KNOWN_ENV_KEYS, GLOBAL_ENV_KEYS, GEARSHOP_ENV_KEYS, SUPPORT_ENV_KEYS
 from admin.auth import verify_csrf
 from admin.routes.helpers import get_script as _get_script
 
@@ -140,10 +140,15 @@ def config_page(request: Request, script_id: int):
     env_path = script["env_file_path"]
     entries = _parse_env_file(env_path) if env_path else []
 
+    # Filter to only show keys relevant to this script
+    is_support = "support" in script["name"]
+    script_keys = SUPPORT_ENV_KEYS if is_support else GEARSHOP_ENV_KEYS
+    filtered = [e for e in entries if e.get("type") != "env" or e.get("key") in script_keys]
+
     return templates.TemplateResponse("config_editor.html", {
         "request": request,
         "script": script,
-        "entries": entries,
+        "entries": filtered,
         "csrf_token": request.state.csrf_token,
         "flash_message": None,
     })
