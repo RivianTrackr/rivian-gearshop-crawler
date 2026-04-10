@@ -10,10 +10,12 @@ notifications with detailed diffs.
 
 import os
 import re
+import sys
 import json
 import time
 import hashlib
 import logging
+import resource
 import sqlite3
 import difflib
 from datetime import datetime, timezone
@@ -764,6 +766,19 @@ def _error_alert_ctx():
     )
 
 
+MAX_RUN_SECONDS = int(os.getenv("SUPPORT_MAX_RUN_SECONDS", "1500"))  # 25 min default
+
+
+def _check_timeout(run_start: float, phase: str):
+    """Raise if we've exceeded the max run time."""
+    elapsed = time.time() - run_start
+    if elapsed > MAX_RUN_SECONDS:
+        raise TimeoutError(
+            f"Crawl exceeded {MAX_RUN_SECONDS}s limit during {phase} "
+            f"(elapsed: {elapsed:.0f}s)"
+        )
+
+
 def main():
     init_db()
     crawled_at = now_utc_iso()
@@ -846,6 +861,7 @@ def main():
         articles_data = []
 
         for i, info in enumerate(article_infos):
+            _check_timeout(run_start, f"article extraction ({i+1}/{len(article_infos)})")
             log(f"[{i+1}/{len(article_infos)}] Extracting: {info['slug']}")
             time.sleep(ARTICLE_DELAY)
 
@@ -1181,13 +1197,25 @@ def main():
     conn.close()
 
 
+def _get_peak_memory_mb() -> float:
+    """Get peak RSS memory usage of this process in MB."""
+    try:
+        # ru_maxrss is in KB on Linux
+        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+    except Exception:
+        return 0.0
+
+
 def _record_crawl_run(crawled_at, run_start, status="success", article_count=None,
                        new_articles=None, removed_articles=None,
                        title_changes=None, body_changes=None, url_changes=None,
                        error_message=None):
     """Record a crawl run in the support_crawl_runs table."""
     duration = round(time.time() - run_start, 2)
+    peak_mb = _get_peak_memory_mb()
     finished_at = now_utc_iso()
+    logger.info("Crawl finished: status=%s duration=%.1fs peak_memory=%.1fMB articles=%s",
+                status, duration, peak_mb, article_count)
     try:
         conn = db()
         table_check = conn.execute(
@@ -1211,4 +1239,27 @@ def _record_crawl_run(crawled_at, run_start, status="success", article_count=Non
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except TimeoutError as e:
+        logger.error("Crawl aborted: %s", e)
+        try:
+            send_error_alert(
+                "Crawl Timeout",
+                str(e),
+                **_error_alert_ctx(),
+            )
+        except Exception:
+            pass
+        sys.exit(1)
+    except Exception as e:
+        logger.error("Crawl failed with unexpected error: %s", e, exc_info=True)
+        try:
+            send_error_alert(
+                "Unexpected Error",
+                str(e),
+                **_error_alert_ctx(),
+            )
+        except Exception:
+            pass
+        sys.exit(1)
