@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -110,6 +111,78 @@ def start_service(unit: str) -> tuple[bool, str]:
 def stop_service(unit: str) -> tuple[bool, str]:
     r = subprocess.run(
         ["systemctl", "stop", unit],
+        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+    )
+    return r.returncode == 0, r.stderr
+
+
+def enable_service(unit: str) -> tuple[bool, str]:
+    """Enable and start a systemd unit."""
+    r = subprocess.run(
+        ["systemctl", "enable", "--now", unit],
+        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+    )
+    return r.returncode == 0, r.stderr
+
+
+def disable_service(unit: str) -> tuple[bool, str]:
+    """Disable and stop a systemd unit."""
+    r = subprocess.run(
+        ["systemctl", "disable", "--now", unit],
+        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+    )
+    return r.returncode == 0, r.stderr
+
+
+def daemon_reload() -> tuple[bool, str]:
+    r = subprocess.run(
+        ["systemctl", "daemon-reload"],
+        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+    )
+    return r.returncode == 0, r.stderr
+
+
+def is_unit_installed(unit: str) -> bool:
+    """Check if a systemd unit file exists on disk."""
+    r = subprocess.run(
+        ["systemctl", "cat", unit],
+        capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
+    )
+    return r.returncode == 0
+
+
+def install_unit_files(working_directory: str, service_unit: str, timer_unit: str | None) -> tuple[bool, str]:
+    """Copy .service and .timer files from repo to /etc/systemd/system/ and reload."""
+    import shutil
+    errors = []
+    target_dir = "/etc/systemd/system"
+
+    for unit in (service_unit, timer_unit):
+        if not unit:
+            continue
+        src = os.path.join(working_directory, unit)
+        dst = os.path.join(target_dir, unit)
+        if not os.path.exists(src):
+            errors.append(f"{unit} not found in {working_directory}")
+            continue
+        try:
+            shutil.copy2(src, dst)
+        except Exception as e:
+            errors.append(f"Failed to copy {unit}: {e}")
+
+    if errors:
+        return False, "; ".join(errors)
+
+    ok, err = daemon_reload()
+    if not ok:
+        return False, f"daemon-reload failed: {err}"
+    return True, ""
+
+
+def restart_admin_service() -> tuple[bool, str]:
+    """Restart the admin UI service."""
+    r = subprocess.run(
+        ["systemctl", "restart", "--no-block", "gearshop-admin.service"],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
     return r.returncode == 0, r.stderr

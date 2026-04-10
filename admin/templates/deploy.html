@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Deploy{% endblock %}
+
+{% block content %}
+<h2>Deploy &amp; Services</h2>
+
+{% if flash_message %}
+<article class="alert-{{ flash_type|default('info') }}">
+  {{ flash_message }}
+</article>
+{% endif %}
+
+<article>
+  <header><strong>Git Status</strong></header>
+  <table>
+    <tr><td>Directory</td><td><code>{{ deploy_dir }}</code></td></tr>
+    <tr><td>Branch</td><td><code>{{ git.branch }}</code></td></tr>
+    <tr><td>Latest Commit</td><td><code>{{ git.commit }}</code> {{ git.commit_msg }}</td></tr>
+    <tr>
+      <td>Updates Available</td>
+      <td>
+        {% if git.behind > 0 %}
+          <mark class="warning">{{ git.behind }} commit{{ 's' if git.behind != 1 else '' }} behind</mark>
+        {% elif git.error %}
+          <mark class="error">{{ git.error }}</mark>
+        {% else %}
+          Up to date
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+  <footer>
+    <div role="group">
+      <form method="post" action="/deploy/pull" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit">Pull Latest</button>
+      </form>
+      <form method="post" action="/deploy/restart-admin" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit" class="outline secondary">Restart Admin UI</button>
+      </form>
+    </div>
+  </footer>
+</article>
+
+<article>
+  <header><strong>Systemd Services</strong></header>
+  <p>Install and enable systemd units so crawlers run on a schedule and can be managed from this panel.</p>
+
+  <div style="overflow-x: auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Crawler</th>
+          <th>Service</th>
+          <th>Timer</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for unit in units %}
+        <tr>
+          <td><strong>{{ unit.display_name }}</strong></td>
+          <td>
+            {% if unit.service_installed %}
+              <mark class="success">Installed</mark>
+            {% else %}
+              <mark class="error">Not installed</mark>
+            {% endif %}
+          </td>
+          <td>
+            {% if unit.timer_installed %}
+              <mark class="success">Installed</mark>
+            {% else %}
+              <mark class="error">Not installed</mark>
+            {% endif %}
+          </td>
+          <td>
+            <div role="group" style="margin:0">
+              {% if not unit.service_installed or not unit.timer_installed %}
+              <form method="post" action="/deploy/install-units/{{ unit.id }}" style="margin:0">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline" style="padding:4px 12px">Install Units</button>
+              </form>
+              {% endif %}
+              {% if unit.timer_installed %}
+              <form method="post" action="/deploy/enable-timer/{{ unit.id }}" style="margin:0">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline secondary" style="padding:4px 12px">Enable Timer</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

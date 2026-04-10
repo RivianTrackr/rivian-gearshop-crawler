@@ -7,6 +7,12 @@
   <p>{{ script.description or '' }}</p>
 </hgroup>
 
+{% if not units_installed %}
+<article class="alert-warning" style="padding: 0.75rem 1rem; margin-bottom: 1rem; background: #fff3cd; border-left: 4px solid #fba919; color: #856404;">
+  Systemd units are not installed for this crawler. Go to <a href="/deploy">Deploy</a> to install them.
+</article>
+{% endif %}
+
 <div class="grid">
   <article>
     <header><strong>Service Status</strong></header>
@@ -25,7 +31,16 @@
       </tr>
       <tr><td>Last Run</td><td><span class="utc-time" data-utc="{{ status.last_trigger or '' }}">{{ status.last_trigger or 'Never' }}</span></td></tr>
       <tr><td>Next Run</td><td><span class="utc-time" data-utc="{{ status.next_trigger or '' }}">{{ status.next_trigger or 'N/A' }}</span></td></tr>
-      <tr><td>Timer</td><td>{{ 'Active' if timer_active else 'Stopped' }}</td></tr>
+      <tr>
+        <td>Timer</td>
+        <td>
+          {% if timer_active %}
+            <mark class="success">Active</mark>
+          {% else %}
+            Stopped
+          {% endif %}
+        </td>
+      </tr>
       {% if status.result and status.result != 'success' %}
       <tr><td>Result</td><td><mark class="error">{{ status.result }}</mark></td></tr>
       {% endif %}
@@ -34,18 +49,25 @@
 
   <article>
     <header><strong>Actions</strong></header>
-    <div role="group" style="flex-direction: column; gap: 0.5rem;">
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
       <form method="post" action="/scripts/{{ script.id }}/start" style="margin:0">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <button type="submit" class="outline">Run Now</button>
+        <button type="submit" class="outline" {% if not units_installed %}disabled{% endif %}>Run Now</button>
       </form>
-      <form method="post" action="/scripts/{{ script.id }}/stop" style="margin:0">
+      {% if timer_active %}
+      <form method="post" action="/scripts/{{ script.id }}/disable-timer" style="margin:0">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <button type="submit" class="outline secondary">Stop Timer</button>
+        <button type="submit" class="outline secondary">Disable Timer</button>
       </form>
+      {% else %}
+      <form method="post" action="/scripts/{{ script.id }}/enable-timer" style="margin:0">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <button type="submit" class="outline" {% if not units_installed %}disabled{% endif %}>Enable Timer</button>
+      </form>
+      {% endif %}
       <form method="post" action="/scripts/{{ script.id }}/restart" style="margin:0">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <button type="submit" class="outline contrast">Restart</button>
+        <button type="submit" class="outline contrast" {% if not units_installed %}disabled{% endif %}>Restart</button>
       </form>
     </div>
     <footer>
