@@ -92,8 +92,8 @@
         {
           label: "Price ($)",
           data: prices,
-          borderColor: "#fba919",
-          backgroundColor: "rgba(251,169,25,0.1)",
+          borderColor: "#0071e3",
+          backgroundColor: "rgba(0,113,227,0.1)",
           fill: true,
           tension: 0.2,
           yAxisID: "y",
@@ -118,7 +118,7 @@
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { labels: { color: "#ccc" } },
+        legend: { labels: { color: "#1d1d1f" } },
         tooltip: {
           callbacks: {
             label: function(ctx) {
@@ -132,18 +132,18 @@
       },
       scales: {
         x: {
-          ticks: { color: "#999", maxTicksLimit: 12 },
-          grid: { color: "rgba(255,255,255,0.05)" }
+          ticks: { color: "#6e6e73", maxTicksLimit: 12 },
+          grid: { color: "rgba(0,0,0,0.06)" }
         },
         y: {
           type: "linear",
           position: "left",
-          title: { display: true, text: "Price ($)", color: "#fba919" },
+          title: { display: true, text: "Price ($)", color: "#0071e3" },
           ticks: {
-            color: "#fba919",
+            color: "#0071e3",
             callback: function(v) { return "$" + v.toFixed(0); }
           },
-          grid: { color: "rgba(255,255,255,0.05)" }
+          grid: { color: "rgba(0,0,0,0.06)" }
         },
         y1: {
           type: "linear",

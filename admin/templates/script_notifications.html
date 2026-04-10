@@ -14,9 +14,7 @@
 <p>Configure how <strong>{{ script.display_name }}</strong> sends alerts when changes are detected.</p>
 
 {% if flash_message %}
-<article aria-label="alert" style="padding: 0.75rem 1rem; margin-bottom: 1rem;
-  background: {% if flash_type == 'error' %}#fef2f2{% elif flash_type == 'success' %}#f0fdf4{% else %}#eff6ff{% endif %};
-  border-left: 4px solid {% if flash_type == 'error' %}#ef4444{% elif flash_type == 'success' %}#22c55e{% else %}#3b82f6{% endif %};">
+<article aria-label="alert" class="alert-{{ flash_type|default('info') }}">
   {{ flash_message }}
 </article>
 {% endif %}
