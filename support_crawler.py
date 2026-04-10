@@ -232,7 +232,7 @@ def discover_article_urls(page) -> list[dict]:
     last_err = None
     for attempt in range(3):
         try:
-            page.goto(SUPPORT_URL, wait_until="domcontentloaded", timeout=90000)
+            page.goto(SUPPORT_URL, wait_until="commit", timeout=90000)
             last_err = None
             break
         except Exception as e:
@@ -244,7 +244,16 @@ def discover_article_urls(page) -> list[dict]:
     if last_err:
         raise last_err
 
-    page.wait_for_timeout(2000)
+    # Wait for JS to render — the support page is likely an SPA
+    try:
+        page.wait_for_selector('a[href*="/support/"]', timeout=30000)
+    except Exception:
+        logger.warning("No support links appeared after 30s — page may not have rendered")
+
+    # Scroll to trigger any lazy-loaded content
+    for _ in range(3):
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(1500)
 
     # Collect all internal links from the support landing page
     all_links = page.eval_on_selector_all(
@@ -298,6 +307,14 @@ def discover_article_urls(page) -> list[dict]:
 
     result = list(articles.values())[:MAX_ARTICLES]
     log(f"Discovered {len(result)} unique articles")
+
+    if not result:
+        logger.warning(
+            "Zero articles discovered — page may not have rendered. "
+            "Found %d raw links, %d category URLs.",
+            len(all_links), len(category_urls),
+        )
+
     return result
 
 
@@ -775,7 +792,10 @@ def main():
             _record_crawl_run(crawled_at, run_start, status="error", error_message=str(e))
             return
 
-        context = browser.new_context(user_agent=HEADERS.get("User-Agent"))
+        context = browser.new_context(
+            user_agent=HEADERS.get("User-Agent"),
+            viewport={"width": 1600, "height": 1200},
+        )
         page = context.new_page()
 
         # Phase 1: Discover all article URLs
