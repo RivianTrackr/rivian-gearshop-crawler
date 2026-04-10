@@ -10,7 +10,8 @@ from admin.auth import verify_csrf
 from admin.db import get_admin_db
 from admin.systemd import (
     install_unit_files, daemon_reload, is_unit_installed,
-    enable_service, restart_admin_service, install_admin_service,
+    enable_service, disable_service, get_timer_active,
+    restart_admin_service, install_admin_service,
 )
 
 logger = logging.getLogger("admin.deploy")
@@ -92,6 +93,7 @@ def _get_unit_status() -> list[dict]:
     for row in rows:
         service_installed = is_unit_installed(row["service_unit"]) if row["service_unit"] else False
         timer_installed = is_unit_installed(row["timer_unit"]) if row["timer_unit"] else False
+        timer_active = get_timer_active(row["timer_unit"]) if timer_installed and row["timer_unit"] else False
         units.append({
             "id": row["id"],
             "name": row["name"],
@@ -101,6 +103,7 @@ def _get_unit_status() -> list[dict]:
             "working_directory": row["working_directory"],
             "service_installed": service_installed,
             "timer_installed": timer_installed,
+            "timer_active": timer_active,
         })
     return units
 
@@ -187,6 +190,24 @@ def enable_timer(request: Request, script_id: int, csrf: str = Depends(verify_cs
         return _deploy_response(request, f"Timer {row['timer_unit']} enabled and started.", "success")
     else:
         return _deploy_response(request, f"Failed to enable timer: {err}", "error")
+
+
+@router.post("/deploy/disable-timer/{script_id}", response_class=HTMLResponse)
+def disable_timer(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
+    conn = get_admin_db()
+    try:
+        row = conn.execute("SELECT * FROM managed_scripts WHERE id = ?", (script_id,)).fetchone()
+    finally:
+        conn.close()
+
+    if not row or not row["timer_unit"]:
+        return _deploy_response(request, "Script or timer not found.", "error")
+
+    ok, err = disable_service(row["timer_unit"])
+    if ok:
+        return _deploy_response(request, f"Timer {row['timer_unit']} disabled.", "success")
+    else:
+        return _deploy_response(request, f"Failed to disable timer: {err}", "error")
 
 
 @router.post("/deploy/install-admin", response_class=HTMLResponse)

@@ -95,8 +95,10 @@
             {% endif %}
           </td>
           <td>
-            {% if unit.timer_installed %}
-              <mark class="success">Installed</mark>
+            {% if unit.timer_active %}
+              <mark class="success">Active</mark>
+            {% elif unit.timer_installed %}
+              <mark class="warning">Stopped</mark>
             {% else %}
               <mark class="error">Not installed</mark>
             {% endif %}
@@ -109,10 +111,15 @@
                 <button type="submit" class="outline" style="padding:4px 12px">Install Units</button>
               </form>
               {% endif %}
-              {% if unit.timer_installed %}
+              {% if unit.timer_active %}
+              <form method="post" action="/deploy/disable-timer/{{ unit.id }}" style="margin:0">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline secondary" style="padding:4px 12px">Disable Timer</button>
+              </form>
+              {% elif unit.timer_installed %}
               <form method="post" action="/deploy/enable-timer/{{ unit.id }}" style="margin:0">
                 <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-                <button type="submit" class="outline secondary" style="padding:4px 12px">Enable Timer</button>
+                <button type="submit" class="outline" style="padding:4px 12px">Enable Timer</button>
               </form>
               {% endif %}
             </div>
