@@ -31,6 +31,7 @@ def dashboard(request: Request):
             "description": row["description"],
             "status": status,
             "timer_active": timer_active,
+            "is_support": "support" in row["name"],
         })
 
     return templates.TemplateResponse("dashboard.html", {

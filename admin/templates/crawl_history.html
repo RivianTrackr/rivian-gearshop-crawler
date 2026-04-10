@@ -10,13 +10,13 @@
 <div style="overflow-x: auto;">
   <table>
     <thead>
-      <tr><th>Run Time</th><th>Products Found</th></tr>
+      <tr><th>Run Time</th><th>{% if db_type == 'support' %}Articles Found{% else %}Products Found{% endif %}</th></tr>
     </thead>
     <tbody>
       {% for row in stats %}
       <tr>
         <td><span class="utc-time" data-utc="{{ row.run_at }}">{{ row.run_at }}</span></td>
-        <td>{{ row.product_count }}</td>
+        <td>{{ row.item_count }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -26,17 +26,29 @@
 {% if total_pages > 1 %}
 <nav style="text-align: center;">
   {% if page > 1 %}
+    {% if db_type == 'support' %}
+    <a href="/data/{{ script.id }}/support-crawl-history?page={{ page - 1 }}">&larr; Previous</a>
+    {% else %}
     <a href="/data/{{ script.id }}/crawl-history?page={{ page - 1 }}">&larr; Previous</a>
+    {% endif %}
   {% endif %}
   <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
   {% if page < total_pages %}
+    {% if db_type == 'support' %}
+    <a href="/data/{{ script.id }}/support-crawl-history?page={{ page + 1 }}">Next &rarr;</a>
+    {% else %}
     <a href="/data/{{ script.id }}/crawl-history?page={{ page + 1 }}">Next &rarr;</a>
+    {% endif %}
   {% endif %}
 </nav>
 {% endif %}
 
 <p>
+  {% if db_type == 'support' %}
+  <a href="/data/{{ script.id }}/articles">Browse Articles</a> |
+  {% else %}
   <a href="/data/{{ script.id }}/products">Browse Products</a> |
+  {% endif %}
   <a href="/scripts/{{ script.id }}">&larr; Back to script detail</a>
 </p>
 {% endblock %}

@@ -248,7 +248,7 @@ def crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
         offset = (page - 1) * PAGE_SIZE
 
         stats = cdb.execute(
-            "SELECT * FROM crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
+            "SELECT run_at, product_count AS item_count FROM crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
             (PAGE_SIZE, offset),
         ).fetchall()
     finally:
@@ -261,6 +261,7 @@ def crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
         "page": page,
         "total_pages": total_pages,
         "total": total,
+        "db_type": "gearshop",
         "csrf_token": request.state.csrf_token,
     })
 
@@ -420,7 +421,7 @@ def support_crawl_history(request: Request, script_id: int, page: int = Query(1,
         offset = (page - 1) * PAGE_SIZE
 
         stats = cdb.execute(
-            "SELECT * FROM support_crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
+            "SELECT run_at, article_count AS item_count FROM support_crawl_stats ORDER BY run_at DESC LIMIT ? OFFSET ?",
             (PAGE_SIZE, offset),
         ).fetchall()
     finally:
@@ -433,5 +434,6 @@ def support_crawl_history(request: Request, script_id: int, page: int = Query(1,
         "page": page,
         "total_pages": total_pages,
         "total": total,
+        "db_type": "support",
         "csrf_token": request.state.csrf_token,
     })
