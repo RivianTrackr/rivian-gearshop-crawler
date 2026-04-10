@@ -154,6 +154,26 @@ def deploy_pull(request: Request, csrf: str = Depends(verify_csrf)):
         return _deploy_response(request, f"Pull failed: {output}", "error")
 
 
+@router.post("/deploy/pull-and-restart", response_class=HTMLResponse)
+def deploy_pull_and_restart(request: Request, csrf: str = Depends(verify_csrf)):
+    ok, output = _git_pull()
+    if not ok:
+        return _deploy_response(request, f"Pull failed: {output}", "error")
+
+    if not _admin_installed():
+        return _deploy_response(request, f"Pull successful: {output}. Admin service not installed — cannot restart.", "warning")
+
+    ok_restart, err = restart_admin_service()
+    if ok_restart:
+        return _deploy_response(
+            request,
+            f"Pull successful: {output}. Admin UI is restarting — refresh in a few seconds.",
+            "success",
+        )
+    else:
+        return _deploy_response(request, f"Pull succeeded but restart failed: {err}", "error")
+
+
 @router.post("/deploy/install-units/{script_id}", response_class=HTMLResponse)
 def install_units(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
     conn = get_admin_db()

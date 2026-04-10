@@ -266,6 +266,74 @@ def crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
     })
 
 
+# ---------------------- Support Article Export ----------------------
+
+_SUPPORT_EXPORT_SQL = """
+SELECT
+  a.id, a.slug, a.title, a.url, a.category,
+  a.body_hash, a.removed, a.first_seen_at, a.last_seen_at, a.updated_at
+FROM support_articles a
+ORDER BY a.title
+"""
+
+
+def _support_export_rows(db_path: str) -> list[dict]:
+    cdb = get_crawler_db(db_path)
+    try:
+        rows = cdb.execute(_SUPPORT_EXPORT_SQL).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "slug": r["slug"],
+                "title": r["title"],
+                "url": r["url"],
+                "category": r["category"],
+                "body_hash": r["body_hash"],
+                "removed": bool(r["removed"]),
+                "first_seen_at": r["first_seen_at"],
+                "last_seen_at": r["last_seen_at"],
+                "updated_at": r["updated_at"],
+            }
+            for r in rows
+        ]
+    finally:
+        cdb.close()
+
+
+@router.get("/data/{script_id}/export-articles.json")
+def export_articles_json(script_id: int):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    rows = _support_export_rows(script["db_path"])
+    content = json.dumps({"count": len(rows), "articles": rows}, indent=2, ensure_ascii=False)
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="support-articles-export.json"'},
+    )
+
+
+@router.get("/data/{script_id}/export-articles.csv")
+def export_articles_csv(script_id: int):
+    script = _get_script(script_id)
+    if not script or not script["db_path"] or not os.path.exists(script["db_path"]):
+        return RedirectResponse("/", status_code=303)
+
+    rows = _support_export_rows(script["db_path"])
+    output = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="support-articles-export.csv"'},
+    )
+
+
 # ---------------------- Support Article Routes ----------------------
 
 def _is_support_db(db_path: str) -> bool:

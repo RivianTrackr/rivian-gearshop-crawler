@@ -91,6 +91,7 @@ def notifications_page(request: Request, script_id: int):
     return templates.TemplateResponse("script_notifications.html", {
         "request": request,
         "script": script,
+        "is_support": "support" in script["name"],
         "email": email_notif or {"enabled": False, "config": {}},
         "discord": discord_notif or {"enabled": False, "config": {}},
         "csrf_token": request.state.csrf_token,
@@ -301,6 +302,7 @@ def _notif_response(request: Request, script_id: int, flash: str = None, flash_t
     return templates.TemplateResponse("script_notifications.html", {
         "request": request,
         "script": script,
+        "is_support": "support" in (script["name"] if script else ""),
         "email": email_notif or {"enabled": False, "config": {}},
         "discord": discord_notif or {"enabled": False, "config": {}},
         "csrf_token": request.state.csrf_token,
