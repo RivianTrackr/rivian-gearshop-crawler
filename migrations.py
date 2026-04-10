@@ -115,6 +115,66 @@ MIGRATIONS = [
         );
         """,
     ),
+    (
+        4,
+        "Add support article tables for rivian.com/support crawler",
+        """
+        CREATE TABLE IF NOT EXISTS support_articles (
+            article_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT UNIQUE NOT NULL,
+            slug TEXT NOT NULL,
+            title TEXT,
+            category TEXT,
+            content_hash TEXT,
+            first_seen_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS support_article_snapshots (
+            snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            article_id INTEGER NOT NULL,
+            crawled_at TEXT NOT NULL,
+            title TEXT,
+            category TEXT,
+            content_text TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            FOREIGN KEY(article_id) REFERENCES support_articles(article_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS support_crawl_markers (
+            crawled_at TEXT NOT NULL,
+            article_id INTEGER NOT NULL,
+            PRIMARY KEY (crawled_at, article_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS support_crawl_stats (
+            run_at TEXT PRIMARY KEY,
+            article_count INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS support_crawl_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            status TEXT NOT NULL DEFAULT 'running',
+            article_count INTEGER,
+            articles_changed INTEGER,
+            new_articles INTEGER,
+            removed_articles INTEGER,
+            error_message TEXT,
+            duration_seconds REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS support_heartbeats (
+            day_utc TEXT PRIMARY KEY
+        );
+
+        CREATE TABLE IF NOT EXISTS support_removed_once (
+            article_id INTEGER PRIMARY KEY,
+            first_reported_at TEXT NOT NULL
+        );
+        """,
+    ),
 ]
 
 
