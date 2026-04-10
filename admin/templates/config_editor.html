@@ -4,7 +4,7 @@
 {% block content %}
 <hgroup>
   <h2>Configuration — {{ script.display_name }}</h2>
-  <p>{{ script.env_file_path }}</p>
+  <p>{{ script.env_file_path }} <small>(shared by all crawlers)</small></p>
 </hgroup>
 
 <form method="post" action="/scripts/{{ script.id }}/config">
@@ -15,8 +15,20 @@
       <tr><th>Key</th><th>Value</th></tr>
     </thead>
     <tbody>
+      {% set ns = namespace(section='') %}
       {% for entry in entries %}
         {% if entry.type == 'env' %}
+          {# Determine section for visual grouping #}
+          {% if entry.key.startswith('SUPPORT_') and ns.section != 'support' %}
+            {% set ns.section = 'support' %}
+            <tr><td colspan="2" style="padding: 12px 0 4px;"><strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6e6e73;">Support Crawler</strong></td></tr>
+          {% elif entry.key.startswith('ADMIN_') and ns.section != 'admin' %}
+            {% set ns.section = 'admin' %}
+            <tr><td colspan="2" style="padding: 12px 0 4px;"><strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6e6e73;">Admin</strong></td></tr>
+          {% elif not entry.key.startswith('SUPPORT_') and not entry.key.startswith('ADMIN_') and ns.section != 'general' %}
+            {% set ns.section = 'general' %}
+            <tr><td colspan="2" style="padding: 12px 0 4px;"><strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6e6e73;">General / Gear Shop</strong></td></tr>
+          {% endif %}
         <tr>
           <td>
             <input type="hidden" name="key" value="{{ entry.key }}">

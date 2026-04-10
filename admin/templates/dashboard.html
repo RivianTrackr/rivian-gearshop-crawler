@@ -39,8 +39,20 @@
       </tr>
       <tr>
         <td><strong>Timer</strong></td>
-        <td>{{ 'Active' if script.timer_active else 'Stopped' }}</td>
+        <td>
+          {% if script.timer_active %}
+            <mark class="success">Active</mark>
+          {% else %}
+            Stopped
+          {% endif %}
+        </td>
       </tr>
+      {% if script.last_count is not none %}
+      <tr>
+        <td><strong>Last Result</strong></td>
+        <td>{{ script.last_count }} {{ 'articles' if script.is_support else 'products' }}</td>
+      </tr>
+      {% endif %}
     </table>
 
     <footer>

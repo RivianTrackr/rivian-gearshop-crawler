@@ -55,7 +55,7 @@
         <button type="submit" class="outline" {% if not units_installed %}disabled{% endif %}>Run Now</button>
       </form>
       {% if timer_active %}
-      <form method="post" action="/scripts/{{ script.id }}/disable-timer" style="margin:0">
+      <form method="post" action="/scripts/{{ script.id }}/disable-timer" style="margin:0" data-confirm="This will stop scheduled runs. Continue?">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <button type="submit" class="outline secondary">Disable Timer</button>
       </form>
