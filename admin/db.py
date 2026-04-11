@@ -78,7 +78,7 @@ def get_crawler_db(db_path: str) -> sqlite3.Connection:
 
 def get_crawler_db_rw(db_path: str) -> sqlite3.Connection:
     """Open a crawler DB in read-write mode (for managing content filters)."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     return conn
