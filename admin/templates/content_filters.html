@@ -48,9 +48,9 @@
           <td><small>{{ f.description or '—' }}</small></td>
           <td>
             {% if f.enabled %}
-              <mark style="background: #d1f4e0; color: #0a5e2a; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Enabled</mark>
+              <mark class="success" style="padding: 2px 8px; border-radius: 4px; font-size: 12px;">Enabled</mark>
             {% else %}
-              <mark style="background: #e8e8ed; color: #6e6e73; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Disabled</mark>
+              <mark style="padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #374151; color: #9ca3af;">Disabled</mark>
             {% endif %}
           </td>
           <td>
@@ -64,7 +64,7 @@
               <form method="post" action="/scripts/{{ script.id }}/content-filters/{{ f.id }}/delete" style="margin: 0;"
                     onsubmit="return confirm('Delete this filter?')">
                 <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-                <button type="submit" class="outline" style="padding: 4px 12px; margin: 0; font-size: 13px; color: #ff3b30; border-color: #ff3b30;">
+                <button type="submit" class="outline" style="padding: 4px 12px; margin: 0; font-size: 13px; color: #ef4444; border-color: #ef4444;">
                   Delete
                 </button>
               </form>

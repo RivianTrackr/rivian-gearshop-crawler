@@ -118,7 +118,7 @@
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { labels: { color: "#1d1d1f" } },
+        legend: { labels: { color: "#e5e7eb" } },
         tooltip: {
           callbacks: {
             label: function(ctx) {
@@ -132,8 +132,8 @@
       },
       scales: {
         x: {
-          ticks: { color: "#6e6e73", maxTicksLimit: 12 },
-          grid: { color: "rgba(0,0,0,0.06)" }
+          ticks: { color: "#9ca3af", maxTicksLimit: 12 },
+          grid: { color: "rgba(255,255,255,0.06)" }
         },
         y: {
           type: "linear",
@@ -143,7 +143,7 @@
             color: "#0071e3",
             callback: function(v) { return "$" + v.toFixed(0); }
           },
-          grid: { color: "rgba(0,0,0,0.06)" }
+          grid: { color: "rgba(255,255,255,0.06)" }
         },
         y1: {
           type: "linear",

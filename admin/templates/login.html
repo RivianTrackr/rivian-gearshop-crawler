@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login — RivianCrawlr</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="/static/style.css?v=8">
+  <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
   <div class="brand-gradient"></div>
@@ -16,7 +16,7 @@
       </header>
 
       {% if error %}
-      <p style="color: #c41e3a;">{{ error }}</p>
+      <p style="color: #ef4444;">{{ error }}</p>
       {% endif %}
 
       <form method="post" action="/login">
