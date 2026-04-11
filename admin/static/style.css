@@ -1,22 +1,22 @@
 /* ============================================================
-   RivianCrawlr Admin — Light theme overrides for Pico CSS
-   Following CLAUDE.md light admin/internal palette
+   RivianCrawlr Admin — Dark theme overrides for Pico CSS
+   Following CLAUDE.md dark consumer-facing palette
    ============================================================ */
 
 :root {
-  --pico-background-color: #ffffff;
-  --pico-card-background-color: #f5f5f7;
-  --pico-card-sectioning-background-color: #f5f5f7;
-  --pico-primary: #0071e3;
-  --pico-primary-hover: #0077ed;
-  --pico-primary-inverse: #ffffff;
-  --pico-color: #1d1d1f;
-  --pico-muted-color: #86868b;
-  --pico-secondary: #6e6e73;
-  --pico-muted-border-color: #d2d2d7;
+  --pico-background-color: #0f1a26;
+  --pico-card-background-color: #121e2b;
+  --pico-card-sectioning-background-color: #121e2b;
+  --pico-primary: #fba919;
+  --pico-primary-hover: #e89a0e;
+  --pico-primary-inverse: #0f172a;
+  --pico-color: #e5e7eb;
+  --pico-muted-color: #9ca3af;
+  --pico-secondary: #9ca3af;
+  --pico-muted-border-color: #374151;
   --rtg-accent: #fba919;
-  --rtg-error: #c41e3a;
-  --rtg-text-secondary: #6e6e73;
+  --rtg-error: #ef4444;
+  --rtg-text-secondary: #9ca3af;
 }
 
 /* ---------- Typography ---------- */
@@ -53,34 +53,34 @@ code, pre, kbd {
 /* ---------- Flash Messages ---------- */
 
 article.flash-success {
-  border-left: 4px solid #34c759;
-  background: #d1f4e0;
-  color: #0a5e2a;
+  border-left: 4px solid #4ade80;
+  background: color-mix(in srgb, #4ade80 12%, #121e2b);
+  color: #4ade80;
 }
 
 article.flash-error {
-  border-left: 4px solid #ff3b30;
-  background: #ffe5e5;
-  color: #c41e3a;
+  border-left: 4px solid #ef4444;
+  background: color-mix(in srgb, #ef4444 12%, #121e2b);
+  color: #fca5a5;
 }
 
 article.flash-info {
   border-left: 4px solid #60a5fa;
-  background: #dbeafe;
-  color: #1e40af;
+  background: color-mix(in srgb, #60a5fa 12%, #121e2b);
+  color: #93bbfd;
 }
 
 article.flash-warning {
   border-left: 4px solid var(--rtg-accent);
-  background: #fff3cd;
-  color: #856404;
+  background: color-mix(in srgb, #fba919 12%, #121e2b);
+  color: #fcd278;
 }
 
 /* ---------- Badges ---------- */
 
 mark {
-  background-color: #d1f4e0;
-  color: #0a5e2a;
+  background-color: color-mix(in srgb, #4ade80 15%, #121e2b);
+  color: #4ade80;
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 13px;
@@ -88,31 +88,31 @@ mark {
 }
 
 mark.error {
-  background-color: #ffe5e5;
-  color: #c41e3a;
+  background-color: color-mix(in srgb, #ef4444 15%, #121e2b);
+  color: #fca5a5;
 }
 
 mark.success {
-  background-color: #d1f4e0;
-  color: #0a5e2a;
+  background-color: color-mix(in srgb, #4ade80 15%, #121e2b);
+  color: #4ade80;
 }
 
 mark.info {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: color-mix(in srgb, #60a5fa 15%, #121e2b);
+  color: #93bbfd;
 }
 
 mark.warning {
-  background-color: #fff3cd;
-  color: #856404;
+  background-color: color-mix(in srgb, #fba919 15%, #121e2b);
+  color: #fcd278;
 }
 
 /* ---------- Log Output ---------- */
 
 pre#log-output {
-  background: #f5f5f7;
-  border: 1px solid #d2d2d7;
-  color: #1d1d1f;
+  background: #0f1a26;
+  border: 1px solid #374151;
+  color: #e5e7eb;
   font-size: 13px;
   max-height: 600px;
   overflow-y: auto;
@@ -126,22 +126,22 @@ pre#log-output {
 /* ---------- Buttons ---------- */
 
 .btn-destructive {
-  background: #ff3b30;
-  border-color: #ff3b30;
+  background: #ef4444;
+  border-color: #ef4444;
   color: #fff;
 }
 
 .btn-destructive:hover {
-  background: #e0342b;
-  border-color: #e0342b;
+  background: #dc2626;
+  border-color: #dc2626;
   color: #fff;
 }
 
 /* ---------- Tables ---------- */
 
 table thead th {
-  background: #f5f5f7;
-  color: #6e6e73;
+  background: #0f1a26;
+  color: #9ca3af;
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
@@ -149,34 +149,43 @@ table thead th {
 }
 
 table tbody tr:hover {
-  background: #fafafa;
+  background: color-mix(in srgb, #374151 30%, #121e2b);
 }
 
-/* ---------- Inline alert (used in settings/notifications) ---------- */
+/* ---------- Inline alert (used in settings/notifications/content-filters) ---------- */
 
 .alert-success {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: #d1f4e0;
-  border-left: 4px solid #34c759;
-  color: #0a5e2a;
+  background: color-mix(in srgb, #4ade80 12%, #121e2b);
+  border-left: 4px solid #4ade80;
+  color: #4ade80;
   border-radius: 0 8px 8px 0;
 }
 
 .alert-error {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: #ffe5e5;
-  border-left: 4px solid #ff3b30;
-  color: #c41e3a;
+  background: color-mix(in srgb, #ef4444 12%, #121e2b);
+  border-left: 4px solid #ef4444;
+  color: #fca5a5;
   border-radius: 0 8px 8px 0;
 }
 
 .alert-info {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: #dbeafe;
+  background: color-mix(in srgb, #60a5fa 12%, #121e2b);
   border-left: 4px solid #60a5fa;
-  color: #1e40af;
+  color: #93bbfd;
+  border-radius: 0 8px 8px 0;
+}
+
+.alert-warning {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: color-mix(in srgb, #fba919 12%, #121e2b);
+  border-left: 4px solid var(--rtg-accent);
+  color: #fcd278;
   border-radius: 0 8px 8px 0;
 }
