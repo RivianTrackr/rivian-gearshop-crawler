@@ -104,7 +104,7 @@ MIGRATIONS = [
         """,
     ),
     (
-        2,
+        5,
         "Add content_filters table for stripping noisy sections before diff comparison",
         """
         CREATE TABLE IF NOT EXISTS content_filters (
