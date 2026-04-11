@@ -33,23 +33,22 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
 
     # Get crawl stats if DB exists (gearshop uses crawl_stats, support uses support_crawl_stats)
     crawl_stats = []
-    db_type = "gearshop"
+    db_type = "support" if "support" in script["name"] else "gearshop"
     if script["db_path"] and os.path.exists(script["db_path"]):
         cdb = get_crawler_db(script["db_path"])
         try:
-            crawl_stats = cdb.execute(
-                "SELECT run_at, product_count AS item_count FROM crawl_stats ORDER BY run_at DESC LIMIT ?",
-                (CRAWL_STATS_LIMIT,)
-            ).fetchall()
-        except Exception:
-            try:
+            if db_type == "support":
                 crawl_stats = cdb.execute(
                     "SELECT run_at, article_count AS item_count FROM support_crawl_stats ORDER BY run_at DESC LIMIT ?",
                     (CRAWL_STATS_LIMIT,)
                 ).fetchall()
-                db_type = "support"
-            except Exception:
-                pass
+            else:
+                crawl_stats = cdb.execute(
+                    "SELECT run_at, product_count AS item_count FROM crawl_stats ORDER BY run_at DESC LIMIT ?",
+                    (CRAWL_STATS_LIMIT,)
+                ).fetchall()
+        except Exception:
+            pass
         finally:
             cdb.close()
 
