@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Content Filters — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ul>
+    <li><a href="/">Dashboard</a></li>
+    <li><a href="/scripts/{{ script.id }}">{{ script.display_name }}</a></li>
+    <li>Content Filters</li>
+  </ul>
+</nav>
+
+<h2>Content Filters</h2>
+<p>Manage patterns that are stripped from article body text <strong>before</strong> change detection.
+  Use this to ignore noisy sections like "Related articles" that change frequently but aren't meaningful content updates.</p>
+
+{% if flash_message %}
+<article aria-label="alert" class="alert-{{ flash_type|default('info') }}">
+  {{ flash_message }}
+</article>
+{% endif %}
+
+{% if not table_exists %}
+<article aria-label="alert" class="alert-warning">
+  The content filters table does not exist yet. Run the support crawler once to apply the latest database migration, then return here.
+</article>
+{% else %}
+
+<article>
+  <header><strong>Active Filters</strong></header>
+  {% if filters %}
+  <figure>
+    <table role="grid">
+      <thead>
+        <tr>
+          <th scope="col">Pattern</th>
+          <th scope="col">Type</th>
+          <th scope="col">Description</th>
+          <th scope="col">Status</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filters %}
+        <tr>
+          <td><code>{{ f.pattern }}</code></td>
+          <td><small>{{ filter_types.get(f.filter_type, f.filter_type) }}</small></td>
+          <td><small>{{ f.description or '—' }}</small></td>
+          <td>
+            {% if f.enabled %}
+              <mark style="background: #d1f4e0; color: #0a5e2a; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Enabled</mark>
+            {% else %}
+              <mark style="background: #e8e8ed; color: #6e6e73; padding: 2px 8px; border-radius: 4px; font-size: 12px;">Disabled</mark>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display: flex; gap: 0.5rem;">
+              <form method="post" action="/scripts/{{ script.id }}/content-filters/{{ f.id }}/toggle" style="margin: 0;">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline secondary" style="padding: 4px 12px; margin: 0; font-size: 13px;">
+                  {{ 'Disable' if f.enabled else 'Enable' }}
+                </button>
+              </form>
+              <form method="post" action="/scripts/{{ script.id }}/content-filters/{{ f.id }}/delete" style="margin: 0;"
+                    onsubmit="return confirm('Delete this filter?')">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <button type="submit" class="outline" style="padding: 4px 12px; margin: 0; font-size: 13px; color: #ff3b30; border-color: #ff3b30;">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </figure>
+  {% else %}
+  <p>No content filters configured. Articles will be compared in full.</p>
+  {% endif %}
+</article>
+
+<article>
+  <header><strong>Add Filter</strong></header>
+  <form method="post" action="/scripts/{{ script.id }}/content-filters/add">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <label for="pattern">Pattern</label>
+    <input type="text" id="pattern" name="pattern" required
+           placeholder="e.g. Related articles">
+    <small>Text to match against article body lines (case-insensitive). Everything from the matching line onward is stripped before comparison.</small>
+
+    <label for="filter_type">Filter Type</label>
+    <select id="filter_type" name="filter_type">
+      {% for key, label in filter_types.items() %}
+      <option value="{{ key }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="description">Description <small>(optional)</small></label>
+    <input type="text" id="description" name="description"
+           placeholder="Why this filter exists">
+
+    <button type="submit">Add Filter</button>
+  </form>
+</article>
+
+<article>
+  <header><strong>How It Works</strong></header>
+  <ul>
+    <li><strong>Section strip</strong> — When a line in the article body contains the pattern text, that line and all lines below it are removed before the crawler computes the content hash.</li>
+    <li>The raw article text is still stored in full — filters only affect <em>change detection</em> and <em>diff display</em>.</li>
+    <li>Filter changes take effect on the <strong>next crawl run</strong>.</li>
+    <li>Patterns are matched case-insensitively.</li>
+  </ul>
+</article>
+
+{% endif %}
+{% endblock %}

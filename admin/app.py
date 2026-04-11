@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from admin.db import init_admin_db
 from admin.auth import validate_session_token, get_csrf_token, create_session_token, COOKIE_NAME
 from admin.config import SESSION_MAX_AGE
-from admin.routes import auth_routes, dashboard, scripts, config_editor, data_viewer, settings, notifications, deploy
+from admin.routes import auth_routes, dashboard, scripts, config_editor, data_viewer, settings, notifications, deploy, content_filters
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -81,4 +81,5 @@ app.include_router(config_editor.router)
 app.include_router(data_viewer.router)
 app.include_router(settings.router)
 app.include_router(notifications.router)
+app.include_router(content_filters.router)
 app.include_router(deploy.router)

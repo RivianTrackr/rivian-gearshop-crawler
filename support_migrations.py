@@ -103,6 +103,25 @@ MIGRATIONS = [
         );
         """,
     ),
+    (
+        2,
+        "Add content_filters table for stripping noisy sections before diff comparison",
+        """
+        CREATE TABLE IF NOT EXISTS content_filters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern TEXT NOT NULL,
+            filter_type TEXT NOT NULL DEFAULT 'section_strip',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            description TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        INSERT INTO content_filters (pattern, filter_type, enabled, description, created_at)
+        VALUES ('Related articles', 'section_strip', 1,
+                'Strips the Related articles section and everything below it from article body before comparison',
+                datetime('now'));
+        """,
+    ),
 ]
 
 
