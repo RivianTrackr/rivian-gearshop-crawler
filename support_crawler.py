@@ -192,6 +192,47 @@ def should_send_heartbeat(conn):
     return not heartbeat_sent_today(conn)
 
 
+# ---------------------- Content Filters ----------------------
+
+_content_filters: list[dict] = []
+
+
+def load_content_filters(conn):
+    """Load enabled content filters from the database."""
+    global _content_filters
+    try:
+        rows = conn.execute(
+            "SELECT id, pattern, filter_type FROM content_filters WHERE enabled = 1"
+        ).fetchall()
+        _content_filters = [dict(r) for r in rows]
+        if _content_filters:
+            logger.info("Loaded %d content filter(s)", len(_content_filters))
+    except Exception as e:
+        logger.warning("Could not load content filters: %s", e)
+        _content_filters = []
+
+
+def apply_content_filters(text: str) -> str:
+    """Strip sections matching content filters from body text.
+
+    For 'section_strip' filters, removes everything from the line containing
+    the pattern through the end of the text.  This handles "Related articles"
+    blocks that appear at the bottom of pages.
+    """
+    for f in _content_filters:
+        pattern = f["pattern"]
+        if f["filter_type"] == "section_strip":
+            lines = text.splitlines()
+            cut_index = None
+            for i, line in enumerate(lines):
+                if pattern.lower() in line.lower().strip():
+                    cut_index = i
+                    break
+            if cut_index is not None:
+                text = "\n".join(lines[:cut_index]).rstrip()
+    return text
+
+
 # ---------------------- Content Helpers ----------------------
 
 def normalize_text(text: str) -> str:
@@ -200,8 +241,8 @@ def normalize_text(text: str) -> str:
 
 
 def compute_content_hash(text: str) -> str:
-    """SHA-256 of normalized text."""
-    return hashlib.sha256(normalize_text(text).encode("utf-8")).hexdigest()
+    """SHA-256 of normalized text, after stripping filtered sections."""
+    return hashlib.sha256(normalize_text(apply_content_filters(text)).encode("utf-8")).hexdigest()
 
 
 def slug_from_url(url: str) -> str:
@@ -781,6 +822,11 @@ def _check_timeout(run_start: float, phase: str):
 
 def main():
     init_db()
+    conn = db()
+    try:
+        load_content_filters(conn)
+    finally:
+        conn.close()
     crawled_at = now_utc_iso()
     run_start = time.time()
 
@@ -932,13 +978,17 @@ def main():
                     ).fetchone()
                     old_body = prev_snap["body_text"] if prev_snap else existing["body_text"]
 
+                    # Apply content filters so diffs exclude noisy sections
+                    filtered_old = apply_content_filters(old_body)
+                    filtered_new = apply_content_filters(article["body_text"])
+
                     changes["body_changed"].append({
                         "slug": slug,
                         "url": article["url"],
                         "title": article["title"],
-                        "old_body": old_body,
-                        "new_body": article["body_text"],
-                        "diff_html": generate_html_diff(old_body, article["body_text"]),
+                        "old_body": filtered_old,
+                        "new_body": filtered_new,
+                        "diff_html": generate_html_diff(filtered_old, filtered_new),
                         "change_type": "content updated",
                     })
 
