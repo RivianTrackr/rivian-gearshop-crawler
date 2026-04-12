@@ -2,35 +2,35 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<h2>Dashboard</h2>
+<h2>Dashboard <small style="font-size: 12px; font-weight: 400; color: #6e6e73;" id="live-indicator">● live</small></h2>
 
 <article>
   <div class="grid" style="grid-template-columns: repeat(4, 1fr); text-align: center;">
     <div>
       <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">Memory</small>
-      <div style="font-size: 24px; font-weight: 600;">{{ system.mem_pct }}%</div>
-      <small style="color: #6e6e73;">{{ system.mem_used_mb }} / {{ system.mem_total_mb }} MB</small>
+      <div style="font-size: 24px; font-weight: 600;"><span data-sys="mem_pct">{{ system.mem_pct }}</span>%</div>
+      <small style="color: #6e6e73;"><span data-sys="mem_used_mb">{{ system.mem_used_mb }}</span> / <span data-sys="mem_total_mb">{{ system.mem_total_mb }}</span> MB</small>
     </div>
     <div>
       <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">CPU Load</small>
-      <div style="font-size: 24px; font-weight: 600;">{{ system.load_1m }}</div>
-      <small style="color: #6e6e73;">{{ system.load_5m }} / {{ system.load_15m }} (5m/15m)</small>
+      <div style="font-size: 24px; font-weight: 600;" data-sys="load_1m">{{ system.load_1m }}</div>
+      <small style="color: #6e6e73;"><span data-sys="load_5m">{{ system.load_5m }}</span> / <span data-sys="load_15m">{{ system.load_15m }}</span> (5m/15m)</small>
     </div>
     <div>
       <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">Disk</small>
-      <div style="font-size: 24px; font-weight: 600;">{{ system.disk_pct }}%</div>
-      <small style="color: #6e6e73;">{{ system.disk_used_gb }} / {{ system.disk_total_gb }} GB</small>
+      <div style="font-size: 24px; font-weight: 600;"><span data-sys="disk_pct">{{ system.disk_pct }}</span>%</div>
+      <small style="color: #6e6e73;"><span data-sys="disk_used_gb">{{ system.disk_used_gb }}</span> / <span data-sys="disk_total_gb">{{ system.disk_total_gb }}</span> GB</small>
     </div>
     <div>
       <small style="color: #6e6e73; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; font-weight: 600;">Uptime</small>
-      <div style="font-size: 24px; font-weight: 600;">{{ system.uptime }}</div>
+      <div style="font-size: 24px; font-weight: 600;" data-sys="uptime">{{ system.uptime }}</div>
     </div>
   </div>
 </article>
 
-<div class="grid" style="grid-template-columns: 1fr;">
+<div class="grid" style="grid-template-columns: 1fr;" id="scripts-grid">
 {% for script in scripts %}
-  <article>
+  <article data-script-id="{{ script.id }}">
     <header>
       <hgroup>
         <h3>{{ script.display_name }}</h3>
@@ -41,7 +41,7 @@
     <table>
       <tr>
         <td><strong>Status</strong></td>
-        <td>
+        <td data-field="status">
           {% if script.status.active_state == 'active' %}
             <mark>Running</mark>
           {% elif script.status.active_state == 'inactive' %}
@@ -55,15 +55,15 @@
       </tr>
       <tr>
         <td><strong>Last Run</strong></td>
-        <td><span class="utc-time" data-utc="{{ script.status.last_trigger or '' }}">{{ script.status.last_trigger or 'Never' }}</span></td>
+        <td><span class="utc-time" data-field="last_trigger" data-utc="{{ script.status.last_trigger or '' }}">{{ script.status.last_trigger or 'Never' }}</span></td>
       </tr>
       <tr>
         <td><strong>Next Run</strong></td>
-        <td><span class="utc-time" data-utc="{{ script.status.next_trigger or '' }}">{{ script.status.next_trigger or 'N/A' }}</span></td>
+        <td><span class="utc-time" data-field="next_trigger" data-utc="{{ script.status.next_trigger or '' }}">{{ script.status.next_trigger or 'N/A' }}</span></td>
       </tr>
       <tr>
         <td><strong>Timer</strong></td>
-        <td>
+        <td data-field="timer">
           {% if script.timer_active %}
             <mark class="success">Active</mark>
           {% else %}
@@ -71,12 +71,10 @@
           {% endif %}
         </td>
       </tr>
-      {% if script.last_count is not none %}
-      <tr>
+      <tr data-field-row="last_count" {% if script.last_count is none %}style="display: none;"{% endif %}>
         <td><strong>Last Result</strong></td>
-        <td>{{ script.last_count }} {% if script.script_type == 'support' %}articles{% elif script.script_type == 'offers' %}offers{% else %}products{% endif %}</td>
+        <td><span data-field="last_count">{{ script.last_count if script.last_count is not none else '' }}</span> <span data-field="count_label">{% if script.script_type == 'support' %}articles{% elif script.script_type == 'offers' %}offers{% else %}products{% endif %}</span></td>
       </tr>
-      {% endif %}
     </table>
 
     <footer>
@@ -95,4 +93,113 @@
   </article>
 {% endfor %}
 </div>
+
+<script>
+(function() {
+  const POLL_MS = 5000;
+  const indicator = document.getElementById('live-indicator');
+
+  function setLive(ok) {
+    if (!indicator) return;
+    indicator.style.color = ok ? '#34c759' : '#ef4444';
+    indicator.textContent = ok ? '● live' : '● offline';
+  }
+
+  function statusCell(active_state) {
+    if (active_state === 'active')   return '<mark>Running</mark>';
+    if (active_state === 'inactive') return '<span>Inactive</span>';
+    if (active_state === 'failed')   return '<mark class="error">Failed</mark>';
+    return '<span>' + (active_state || '?') + '</span>';
+  }
+
+  function timerCell(active) {
+    return active ? '<mark class="success">Active</mark>' : 'Stopped';
+  }
+
+  function countLabel(type) {
+    if (type === 'support') return 'articles';
+    if (type === 'offers')  return 'offers';
+    return 'products';
+  }
+
+  async function tick() {
+    try {
+      const r = await fetch('/api/dashboard-stats', { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+
+      // System stats
+      const sys = data.system || {};
+      document.querySelectorAll('[data-sys]').forEach(el => {
+        const k = el.getAttribute('data-sys');
+        if (k in sys) el.textContent = sys[k];
+      });
+
+      // Per-script cards
+      (data.scripts || []).forEach(s => {
+        const card = document.querySelector('article[data-script-id="' + s.id + '"]');
+        if (!card) return;
+        const st = s.status || {};
+
+        const statusTd = card.querySelector('[data-field="status"]');
+        if (statusTd) statusTd.innerHTML = statusCell(st.active_state);
+
+        const lastRun = card.querySelector('[data-field="last_trigger"]');
+        if (lastRun) {
+          const v = st.last_trigger || '';
+          lastRun.setAttribute('data-utc', v);
+          lastRun.textContent = v || 'Never';
+        }
+
+        const nextRun = card.querySelector('[data-field="next_trigger"]');
+        if (nextRun) {
+          const v = st.next_trigger || '';
+          nextRun.setAttribute('data-utc', v);
+          nextRun.textContent = v || 'N/A';
+        }
+
+        const timerTd = card.querySelector('[data-field="timer"]');
+        if (timerTd) timerTd.innerHTML = timerCell(s.timer_active);
+
+        const row = card.querySelector('[data-field-row="last_count"]');
+        if (row) {
+          if (s.last_count === null || s.last_count === undefined) {
+            row.style.display = 'none';
+          } else {
+            row.style.display = '';
+            const val = row.querySelector('[data-field="last_count"]');
+            const lbl = row.querySelector('[data-field="count_label"]');
+            if (val) val.textContent = s.last_count;
+            if (lbl) lbl.textContent = countLabel(s.script_type);
+          }
+        }
+      });
+
+      // Re-run any UTC→local formatter the base template may have installed.
+      if (typeof window.formatUtcTimes === 'function') {
+        window.formatUtcTimes();
+      }
+
+      setLive(true);
+    } catch (e) {
+      setLive(false);
+    }
+  }
+
+  // Poll only while the tab is visible — no point burning CPU in background tabs.
+  let timer = null;
+  function start() {
+    if (timer) return;
+    timer = setInterval(tick, POLL_MS);
+  }
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else { tick(); start(); }
+  });
+  start();
+})();
+</script>
 {% endblock %}

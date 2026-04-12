@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import os
 import shutil
+
+from dataclasses import asdict, is_dataclass
 
 from admin.db import get_admin_db, get_crawler_db
 from admin.systemd import get_service_status, get_timer_active
@@ -73,8 +75,8 @@ def _get_system_stats() -> dict:
     return stats
 
 
-@router.get("/", response_class=HTMLResponse)
-def dashboard(request: Request):
+def _build_dashboard_data() -> dict:
+    """Compute everything the dashboard displays. Shared by the HTML and JSON routes."""
     conn = get_admin_db()
     try:
         rows = conn.execute("SELECT * FROM managed_scripts ORDER BY display_name").fetchall()
@@ -92,7 +94,6 @@ def dashboard(request: Request):
         else:
             script_type = "gearshop"
 
-        # Fetch last crawl stat
         last_count = None
         if row["db_path"] and os.path.exists(row["db_path"]):
             try:
@@ -116,17 +117,26 @@ def dashboard(request: Request):
             "name": row["name"],
             "display_name": row["display_name"],
             "description": row["description"],
-            "status": status,
+            "status": asdict(status) if is_dataclass(status) else (status or {}),
             "timer_active": timer_active,
             "script_type": script_type,
             "last_count": last_count,
         })
 
-    system = _get_system_stats()
+    return {"scripts": scripts, "system": _get_system_stats()}
 
+
+@router.get("/", response_class=HTMLResponse)
+def dashboard(request: Request):
+    data = _build_dashboard_data()
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
-        "scripts": scripts,
-        "system": system,
+        "scripts": data["scripts"],
+        "system": data["system"],
         "csrf_token": request.state.csrf_token,
     })
+
+
+@router.get("/api/dashboard-stats")
+def dashboard_stats_json():
+    return JSONResponse(_build_dashboard_data())
