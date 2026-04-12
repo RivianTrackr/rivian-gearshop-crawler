@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Rivian Offers Crawler every 60 minutes
+
+[Timer]
+OnBootSec=7min
+OnUnitActiveSec=60min
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
