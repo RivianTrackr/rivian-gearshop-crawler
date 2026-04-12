@@ -74,8 +74,16 @@ DISCORD_CONFIG = {
 
 
 def _load_notification_settings():
-    """Load notification settings from admin DB, falling back to env vars."""
+    """Load notification settings from admin DB, falling back to env vars.
+
+    If a channel row exists in the admin DB it is authoritative — a disabled
+    row explicitly suppresses that channel, even if env vars are set. Env-var
+    fallbacks only apply when no row exists at all (e.g. fresh install).
+    """
     global BREVO_API_KEY, EMAIL_FROM, EMAIL_TO, DISCORD_WEBHOOK_URL, DISCORD_CONFIG
+
+    email_row_present = False
+    discord_row_present = False
 
     if os.path.exists(ADMIN_DB_PATH):
         try:
@@ -92,28 +100,37 @@ def _load_notification_settings():
                 ).fetchall()
                 for row in rows:
                     cfg = json.loads(row["config"])
-                    if row["channel"] == "email" and row["enabled"]:
-                        BREVO_API_KEY = cfg.get("brevo_api_key", "")
-                        EMAIL_FROM = cfg.get("email_from", "")
-                        EMAIL_TO = [e.strip() for e in cfg.get("email_to", "").split(",") if e.strip()]
-                        logger.info("Loaded email notification settings from admin DB")
-                    elif row["channel"] == "discord" and row["enabled"]:
-                        DISCORD_WEBHOOK_URL = cfg.get("webhook_url", "")
-                        for key in DISCORD_CONFIG:
-                            if key in cfg:
-                                DISCORD_CONFIG[key] = cfg[key]
-                        logger.info("Loaded Discord notification settings from admin DB")
+                    if row["channel"] == "email":
+                        email_row_present = True
+                        if row["enabled"]:
+                            BREVO_API_KEY = cfg.get("brevo_api_key", "")
+                            EMAIL_FROM = cfg.get("email_from", "")
+                            EMAIL_TO = [e.strip() for e in cfg.get("email_to", "").split(",") if e.strip()]
+                            logger.info("Loaded email notification settings from admin DB")
+                        else:
+                            logger.info("Email channel disabled in admin DB — suppressing")
+                    elif row["channel"] == "discord":
+                        discord_row_present = True
+                        if row["enabled"]:
+                            DISCORD_WEBHOOK_URL = cfg.get("webhook_url", "")
+                            for key in DISCORD_CONFIG:
+                                if key in cfg:
+                                    DISCORD_CONFIG[key] = cfg[key]
+                            logger.info("Loaded Discord notification settings from admin DB")
+                        else:
+                            logger.info("Discord channel disabled in admin DB — suppressing")
             conn.close()
         except Exception as e:
             logger.warning("Could not load notification settings from admin DB: %s", e)
 
-    if not BREVO_API_KEY:
-        BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
-    if not EMAIL_FROM:
-        EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianCrawlr Alerts <alerts@example.com>")
-    if not EMAIL_TO:
-        EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
-    if not DISCORD_WEBHOOK_URL:
+    if not email_row_present:
+        if not BREVO_API_KEY:
+            BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+        if not EMAIL_FROM:
+            EMAIL_FROM = os.getenv("EMAIL_FROM", "RivianCrawlr Alerts <alerts@example.com>")
+        if not EMAIL_TO:
+            EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
+    if not discord_row_present and not DISCORD_WEBHOOK_URL:
         DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 
