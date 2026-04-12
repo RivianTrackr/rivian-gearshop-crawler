@@ -11,8 +11,9 @@
 </nav>
 
 <h2>Content Filters</h2>
-<p>Manage patterns that are stripped from body text <strong>before</strong> change detection.
-  Use this to ignore noisy sections that change frequently but aren't meaningful content updates.</p>
+<p>Manage patterns applied <strong>before</strong> change detection. Use <em>section strip</em> to ignore
+  noisy trailing sections, and <em>title exclude</em> (offers crawler only) to drop non-offer cards whose
+  heading the discovery walker would otherwise pick up.</p>
 
 {% if flash_message %}
 <article aria-label="alert" class="alert-{{ flash_type|default('info') }}">
@@ -108,10 +109,10 @@
 <article>
   <header><strong>How It Works</strong></header>
   <ul>
-    <li><strong>Section strip</strong> — When a line in the body contains the pattern text, that line and all lines below it are removed before the crawler computes the content hash.</li>
-    <li>The raw body text is still stored in full — filters only affect <em>change detection</em> and <em>diff display</em>.</li>
+    <li><strong>Section strip</strong> — When a line in the body contains the pattern text, that line and all lines below it are removed before the crawler computes the content hash. The raw body is still stored in full; the filter only affects <em>change detection</em> and <em>diff display</em>.</li>
+    <li><strong>Title exclude</strong> (offers crawler only) — When an offer's heading contains the pattern text, the entire offer is dropped at discovery time and never enters the database. Use this for page chrome like <code>The latest offers from Rivian</code> or <code>Explore our current offers</code> that show up as headings but aren't actual offers.</li>
     <li>Filter changes take effect on the <strong>next crawl run</strong>.</li>
-    <li>Patterns are matched case-insensitively.</li>
+    <li>Patterns are matched case-insensitively as substrings.</li>
   </ul>
 </article>
 

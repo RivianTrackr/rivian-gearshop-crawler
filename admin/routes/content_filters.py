@@ -19,6 +19,7 @@ templates = Jinja2Templates(
 
 FILTER_TYPES = {
     "section_strip": "Section strip — removes the matching line and everything below it",
+    "title_exclude": "Title exclude — drops any offer whose title matches (offers crawler only)",
 }
 
 

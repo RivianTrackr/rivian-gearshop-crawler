@@ -236,6 +236,20 @@ def apply_content_filters(text: str) -> str:
     return text
 
 
+def is_title_excluded(title: str) -> bool:
+    """True if the title matches any enabled title_exclude filter."""
+    if not title:
+        return False
+    needle = title.lower()
+    for f in _content_filters:
+        if f["filter_type"] != "title_exclude":
+            continue
+        pat = (f["pattern"] or "").lower().strip()
+        if pat and pat in needle:
+            return True
+    return False
+
+
 # ---------------------- Content Helpers ----------------------
 
 def normalize_text(text: str) -> str:
@@ -365,6 +379,11 @@ def discover_offers(page) -> list[dict]:
         if low in {"offers", "rivian", "menu", "navigation", "search"}:
             continue
         if page_title and low == page_title:
+            continue
+
+        # User-defined title_exclude filters (managed in the admin UI).
+        if is_title_excluded(title):
+            log(f"  title_exclude filter dropped: {title!r}")
             continue
 
         slug = slug_from_title(title)
