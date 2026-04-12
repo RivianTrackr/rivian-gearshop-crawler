@@ -116,5 +116,29 @@
   </ul>
 </article>
 
+{% if reset_supported %}
+<article style="border-color: #ef4444;">
+  <header><strong style="color: #ef4444;">Danger Zone — Reset Data</strong></header>
+  <p>Deletes every offer, snapshot, crawl marker, stat row, run record, heartbeat,
+     and removed-once entry for this crawler. Content filters and schema are preserved,
+     so the next run applies the current filters and is treated as an initial scan.</p>
+  <p><small>Use this when iterating on filters to verify what a fresh crawl would pick up.</small></p>
+  <form method="post" action="/scripts/{{ script.id }}/reset-data"
+        onsubmit="return confirm('Wipe all crawler data for {{ script.display_name }}? This cannot be undone.');"
+        style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div style="flex: 1; min-width: 200px;">
+      <label for="confirm">Type <code>RESET</code> to confirm</label>
+      <input type="text" id="confirm" name="confirm" required placeholder="RESET"
+             autocomplete="off" style="margin: 0;">
+    </div>
+    <button type="submit"
+            style="background: #ef4444; border-color: #ef4444; color: white; margin: 0;">
+      Reset Crawler Data
+    </button>
+  </form>
+</article>
+{% endif %}
+
 {% endif %}
 {% endblock %}

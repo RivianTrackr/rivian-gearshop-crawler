@@ -31,6 +31,40 @@ def _resolve_filter_target(script) -> tuple[str, str]:
     return script["db_path"], "content_filters"
 
 
+# Per-crawler data tables to wipe on "Reset data". Schema (including filters
+# and schema_versions) is preserved so the next crawl behaves like an initial
+# scan without needing to re-run migrations.
+_RESET_TABLES = {
+    "offers": [
+        "offers",
+        "offer_snapshots",
+        "offers_crawl_markers",
+        "offers_crawl_stats",
+        "offers_crawl_runs",
+        "offers_heartbeats",
+        "offers_removed_once",
+    ],
+    "support": [
+        "support_articles",
+        "article_snapshots",
+        "support_crawl_markers",
+        "support_crawl_stats",
+        "support_crawl_runs",
+        "support_heartbeats",
+        "support_removed_once",
+    ],
+}
+
+
+def _reset_tables_for_script(script) -> list[str]:
+    name = (script["name"] if script else "") or ""
+    if "offers" in name:
+        return _RESET_TABLES["offers"]
+    if "support" in name:
+        return _RESET_TABLES["support"]
+    return []
+
+
 def _get_support_script():
     """Return the support crawler script row."""
     from admin.db import get_admin_db
@@ -87,6 +121,7 @@ def content_filters_page(request: Request, script_id: int):
         "filters": filters,
         "filter_types": FILTER_TYPES,
         "table_exists": table_exists,
+        "reset_supported": bool(_reset_tables_for_script(script)),
         "csrf_token": request.state.csrf_token,
         "flash_message": None,
     })
@@ -217,6 +252,79 @@ def delete_content_filter(
     )
 
 
+@router.post("/scripts/{script_id}/reset-data", response_class=HTMLResponse)
+def reset_crawler_data(
+    request: Request,
+    script_id: int,
+    confirm: str = Form(""),
+    csrf: str = Depends(verify_csrf),
+):
+    script = _get_script(script_id)
+    if not script:
+        raise HTTPException(status_code=404, detail="Script not found")
+
+    tables = _reset_tables_for_script(script)
+    if not tables:
+        return _filters_response(
+            request, script,
+            flash="Reset is not supported for this crawler.",
+            flash_type="error",
+        )
+
+    if confirm.strip().upper() != "RESET":
+        return _filters_response(
+            request, script,
+            flash='Type RESET in the confirmation box to wipe data.',
+            flash_type="error",
+        )
+
+    db_path = script["db_path"]
+    deleted = {}
+    try:
+        conn = get_crawler_db_rw(db_path)
+        try:
+            for t in tables:
+                try:
+                    cur = conn.execute(f"DELETE FROM {t}")
+                    deleted[t] = cur.rowcount if cur.rowcount is not None else 0
+                except Exception as e:
+                    logger.warning("Reset: could not clear %s: %s", t, e)
+                    deleted[t] = -1
+            # Reclaim space and reset autoincrement counters.
+            try:
+                conn.execute("DELETE FROM sqlite_sequence")
+            except Exception:
+                pass
+            conn.commit()
+            try:
+                conn.execute("VACUUM")
+            except Exception:
+                pass
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error("Failed to reset crawler data: %s", e)
+        return _filters_response(
+            request, script,
+            flash=f"Reset failed: {e}",
+            flash_type="error",
+        )
+
+    total = sum(v for v in deleted.values() if v and v > 0)
+    logger.info(
+        "Reset data for %s: %d rows deleted across %d tables",
+        script["name"], total, len(tables),
+    )
+    return _filters_response(
+        request, script,
+        flash=(
+            f"Crawler data cleared ({total} rows across {len(tables)} tables). "
+            "The next crawl run will be treated as an initial scan."
+        ),
+        flash_type="success",
+    )
+
+
 def _filters_response(request: Request, script, flash: str = None, flash_type: str = "info"):
     db_path, table = _resolve_filter_target(script)
     filters = []
@@ -241,6 +349,7 @@ def _filters_response(request: Request, script, flash: str = None, flash_type: s
         "filters": filters,
         "filter_types": FILTER_TYPES,
         "table_exists": table_exists,
+        "reset_supported": bool(_reset_tables_for_script(script)),
         "csrf_token": request.state.csrf_token,
         "flash_message": flash,
         "flash_type": flash_type,
