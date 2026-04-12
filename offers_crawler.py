@@ -469,6 +469,16 @@ def send_email(subject, html):
         retry_queue.enqueue("email", send_email, args=(subject, html))
 
 
+def _offer_link(o: dict) -> str:
+    """Return the best link for an offer: its CTA if present, else an anchor
+    into the offers page keyed by slug."""
+    cta = (o.get("cta_url") or "").strip()
+    if cta:
+        return cta
+    slug = o.get("slug") or ""
+    return f"{OFFERS_URL}#{slug}" if slug else OFFERS_URL
+
+
 def build_changes_email(changes: dict, is_initial: bool = False, offer_count: int = 0) -> str:
     title = "RivianCrawlr Offers: Initial Scan" if is_initial else "RivianCrawlr Offers: Changes Detected"
     parts = [
@@ -484,9 +494,10 @@ def build_changes_email(changes: dict, is_initial: bool = False, offer_count: in
             parts.append("<h3>Offers Found</h3><ul>")
             for o in changes["new"]:
                 otitle = html_escape(o["title"])
+                link = html_escape(_offer_link(o))
                 exp = html_escape(o.get("expiration", ""))
                 exp_label = f" &mdash; <em>expires {exp}</em>" if exp else ""
-                parts.append(f"<li>{otitle}{exp_label}</li>")
+                parts.append(f'<li><a href="{link}">{otitle}</a>{exp_label}</li>')
             parts.append("</ul>")
         parts.append("</div>")
         return "".join(parts)
@@ -495,13 +506,10 @@ def build_changes_email(changes: dict, is_initial: bool = False, offer_count: in
         parts.append(f'<h3 style="color:#34c759;">New Offers ({len(changes["new"])})</h3><ul>')
         for o in changes["new"]:
             otitle = html_escape(o["title"])
+            link = html_escape(_offer_link(o))
             exp = html_escape(o.get("expiration", ""))
             exp_label = f" &mdash; <em>expires {exp}</em>" if exp else ""
-            cta = o.get("cta_url") or ""
-            if cta:
-                parts.append(f'<li><a href="{html_escape(cta)}">{otitle}</a>{exp_label}</li>')
-            else:
-                parts.append(f"<li>{otitle}{exp_label}</li>")
+            parts.append(f'<li><a href="{link}">{otitle}</a>{exp_label}</li>')
         parts.append("</ul>")
 
     if changes.get("removed"):
@@ -521,9 +529,13 @@ def build_changes_email(changes: dict, is_initial: bool = False, offer_count: in
         )
         for c in changes["title_changed"]:
             slug = html_escape(c["slug"])
+            link = html_escape(_offer_link(c))
             old_t = html_escape(c["old_title"])
             new_t = html_escape(c["new_title"])
-            parts.append(f"<tr><td>{slug}</td><td>{old_t}</td><td>{new_t}</td></tr>")
+            parts.append(
+                f'<tr><td><a href="{link}">{slug}</a></td>'
+                f"<td>{old_t}</td><td>{new_t}</td></tr>"
+            )
         parts.append("</tbody></table>")
 
     if changes.get("url_changed"):
@@ -548,7 +560,8 @@ def build_changes_email(changes: dict, is_initial: bool = False, offer_count: in
         parts.append(f'<h3>Content Changes ({len(changes["body_changed"])})</h3>')
         for c in changes["body_changed"]:
             otitle = html_escape(c["title"])
-            parts.append(f"<h4>{otitle}</h4>")
+            link = html_escape(_offer_link(c))
+            parts.append(f'<h4><a href="{link}">{otitle}</a></h4>')
             parts.append(
                 f'<div style="border:1px solid #ddd;padding:8px;border-radius:4px;'
                 f'max-height:400px;overflow-y:auto;margin-bottom:16px;">{c["diff_html"]}</div>'
