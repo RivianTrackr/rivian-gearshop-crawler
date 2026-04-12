@@ -1,9 +1,44 @@
 import os
 import re
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 
 SUBPROCESS_TIMEOUT = 10
+
+# Short-lived cache for status reads. The dashboard polls every 5s per viewer
+# and each read fans out to multiple `systemctl show`/`list-timers`/`is-active`
+# subprocess calls, so without caching a single viewer can trigger ~12 shellouts
+# every 5s. A 2s TTL keeps the UI responsive while collapsing bursts.
+_STATUS_CACHE_TTL = 2.0
+_status_cache: dict = {}
+_cache_lock = threading.Lock()
+
+
+def _cache_get(key):
+    now = time.monotonic()
+    with _cache_lock:
+        entry = _status_cache.get(key)
+        if entry and entry[0] > now:
+            return entry[1]
+    return None
+
+
+def _cache_set(key, value):
+    with _cache_lock:
+        _status_cache[key] = (time.monotonic() + _STATUS_CACHE_TTL, value)
+
+
+def _cache_invalidate(*units: str):
+    """Drop cached entries for the given units (and any entry if none given)."""
+    with _cache_lock:
+        if not units:
+            _status_cache.clear()
+            return
+        drop = [k for k in _status_cache if any(u and u in k for u in units)]
+        for k in drop:
+            _status_cache.pop(k, None)
 
 # Matches timestamps like "Tue 2026-03-10 02:25:00 UTC"
 _TIMESTAMP_RE = re.compile(
@@ -36,6 +71,16 @@ def _parse_props(stdout: str) -> dict:
 
 
 def get_service_status(service_unit: str, timer_unit: str | None = None) -> ServiceStatus:
+    key = ("status", service_unit, timer_unit or "")
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    value = _get_service_status_uncached(service_unit, timer_unit)
+    _cache_set(key, value)
+    return value
+
+
+def _get_service_status_uncached(service_unit: str, timer_unit: str | None = None) -> ServiceStatus:
     result = subprocess.run(
         [
             "systemctl", "show", service_unit,
@@ -93,11 +138,17 @@ def get_service_status(service_unit: str, timer_unit: str | None = None) -> Serv
 
 
 def get_timer_active(timer_unit: str) -> bool:
+    key = ("timer_active", timer_unit)
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
     result = subprocess.run(
         ["systemctl", "is-active", timer_unit],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
-    return result.stdout.strip() == "active"
+    value = result.stdout.strip() == "active"
+    _cache_set(key, value)
+    return value
 
 
 def start_service(unit: str) -> tuple[bool, str]:
@@ -105,6 +156,7 @@ def start_service(unit: str) -> tuple[bool, str]:
         ["systemctl", "start", "--no-block", unit],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
+    _cache_invalidate(unit)
     return r.returncode == 0, r.stderr
 
 
@@ -113,6 +165,7 @@ def stop_service(unit: str) -> tuple[bool, str]:
         ["systemctl", "stop", unit],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
+    _cache_invalidate(unit)
     return r.returncode == 0, r.stderr
 
 
@@ -122,6 +175,7 @@ def enable_service(unit: str) -> tuple[bool, str]:
         ["systemctl", "enable", "--now", unit],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
+    _cache_invalidate(unit)
     return r.returncode == 0, r.stderr
 
 
@@ -131,6 +185,7 @@ def disable_service(unit: str) -> tuple[bool, str]:
         ["systemctl", "disable", "--now", unit],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
+    _cache_invalidate(unit)
     return r.returncode == 0, r.stderr
 
 
@@ -139,6 +194,7 @@ def daemon_reload() -> tuple[bool, str]:
         ["systemctl", "daemon-reload"],
         capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT,
     )
+    _cache_invalidate()
     return r.returncode == 0, r.stderr
 
 
