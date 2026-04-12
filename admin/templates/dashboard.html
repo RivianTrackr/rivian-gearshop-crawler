@@ -74,7 +74,7 @@
       {% if script.last_count is not none %}
       <tr>
         <td><strong>Last Result</strong></td>
-        <td>{{ script.last_count }} {{ 'articles' if script.is_support else 'products' }}</td>
+        <td>{{ script.last_count }} {% if script.script_type == 'support' %}articles{% elif script.script_type == 'offers' %}offers{% else %}products{% endif %}</td>
       </tr>
       {% endif %}
     </table>
@@ -83,8 +83,10 @@
       <div role="group">
         <a href="/scripts/{{ script.id }}" role="button" class="outline">Details</a>
         <a href="/scripts/{{ script.id }}/config" role="button" class="outline secondary">Config</a>
-        {% if script.is_support %}
+        {% if script.script_type == 'support' %}
         <a href="/data/{{ script.id }}/articles" role="button" class="outline secondary">Data</a>
+        {% elif script.script_type == 'offers' %}
+        <a href="/data/{{ script.id }}/offers" role="button" class="outline secondary">Data</a>
         {% else %}
         <a href="/data/{{ script.id }}/products" role="button" class="outline secondary">Data</a>
         {% endif %}

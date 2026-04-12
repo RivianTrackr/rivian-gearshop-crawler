@@ -85,7 +85,12 @@ def dashboard(request: Request):
     for row in rows:
         status = get_service_status(row["service_unit"], row["timer_unit"])
         timer_active = get_timer_active(row["timer_unit"]) if row["timer_unit"] else False
-        is_support = "support" in row["name"]
+        if "support" in row["name"]:
+            script_type = "support"
+        elif "offers" in row["name"]:
+            script_type = "offers"
+        else:
+            script_type = "gearshop"
 
         # Fetch last crawl stat
         last_count = None
@@ -93,8 +98,10 @@ def dashboard(request: Request):
             try:
                 cdb = get_crawler_db(row["db_path"])
                 try:
-                    if is_support:
+                    if script_type == "support":
                         r = cdb.execute("SELECT article_count FROM support_crawl_stats ORDER BY run_at DESC LIMIT 1").fetchone()
+                    elif script_type == "offers":
+                        r = cdb.execute("SELECT offer_count FROM offers_crawl_stats ORDER BY run_at DESC LIMIT 1").fetchone()
                     else:
                         r = cdb.execute("SELECT product_count FROM crawl_stats ORDER BY run_at DESC LIMIT 1").fetchone()
                     if r:
@@ -111,7 +118,7 @@ def dashboard(request: Request):
             "description": row["description"],
             "status": status,
             "timer_active": timer_active,
-            "is_support": is_support,
+            "script_type": script_type,
             "last_count": last_count,
         })
 

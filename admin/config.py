@@ -51,6 +51,9 @@ KNOWN_ENV_KEYS = {
     # Support crawler
     "SUPPORT_URL", "SUPPORT_DB_PATH", "SUPPORT_SCRIPT_NAME",
     "SUPPORT_ARTICLE_DELAY", "SUPPORT_MAX_ARTICLES",
+    # Offers crawler
+    "OFFERS_URL", "OFFERS_DB_PATH", "OFFERS_SCRIPT_NAME",
+    "OFFERS_DELAY", "OFFERS_MAX", "OFFERS_MAX_RUN_SECONDS",
 }
 
 # Keys shared across all crawlers (shown on global settings page)
@@ -72,6 +75,13 @@ GEARSHOP_ENV_KEYS = {
 SUPPORT_ENV_KEYS = {
     "SUPPORT_URL", "SUPPORT_DB_PATH", "SUPPORT_SCRIPT_NAME",
     "SUPPORT_ARTICLE_DELAY", "SUPPORT_MAX_ARTICLES",
+}
+
+# Keys specific to the offers crawler
+OFFERS_ENV_KEYS = {
+    "OFFERS_URL", "OFFERS_DB_PATH", "OFFERS_SCRIPT_NAME",
+    "OFFERS_DELAY", "OFFERS_MAX", "OFFERS_MAX_RUN_SECONDS",
+    "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG",
 }
 
 # Keys whose values should be masked in the UI

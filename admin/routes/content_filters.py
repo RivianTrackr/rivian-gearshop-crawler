@@ -22,6 +22,14 @@ FILTER_TYPES = {
 }
 
 
+def _resolve_filter_target(script) -> tuple[str, str]:
+    """Return (db_path, table_name) for the script's content filters."""
+    name = script["name"] if script else ""
+    if "offers" in name:
+        return script["db_path"], "offers_content_filters"
+    return script["db_path"], "content_filters"
+
+
 def _get_support_script():
     """Return the support crawler script row."""
     from admin.db import get_admin_db
@@ -34,12 +42,12 @@ def _get_support_script():
         conn.close()
 
 
-def _has_filters_table(db_path: str) -> bool:
-    """Check if the content_filters table exists in the crawler DB."""
+def _has_filters_table(db_path: str, table: str = "content_filters") -> bool:
+    """Check if the filters table exists in the crawler DB."""
     try:
         conn = get_crawler_db(db_path)
         try:
-            conn.execute("SELECT 1 FROM content_filters LIMIT 1")
+            conn.execute(f"SELECT 1 FROM {table} LIMIT 1")
             return True
         except Exception:
             return False
@@ -55,16 +63,16 @@ def content_filters_page(request: Request, script_id: int):
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
 
-    db_path = script["db_path"]
+    db_path, table = _resolve_filter_target(script)
     filters = []
-    table_exists = _has_filters_table(db_path)
+    table_exists = _has_filters_table(db_path, table)
 
     if table_exists:
         try:
             conn = get_crawler_db(db_path)
             try:
                 filters = conn.execute(
-                    "SELECT * FROM content_filters ORDER BY id"
+                    f"SELECT * FROM {table} ORDER BY id"
                 ).fetchall()
                 filters = [dict(r) for r in filters]
             finally:
@@ -103,13 +111,13 @@ def add_content_filter(
     if filter_type not in FILTER_TYPES:
         return _filters_response(request, script, flash="Invalid filter type.", flash_type="error")
 
-    db_path = script["db_path"]
+    db_path, table = _resolve_filter_target(script)
     try:
         conn = get_crawler_db_rw(db_path)
         try:
             # Check for duplicate pattern
             existing = conn.execute(
-                "SELECT 1 FROM content_filters WHERE pattern = ?", (pattern,)
+                f"SELECT 1 FROM {table} WHERE pattern = ?", (pattern,)
             ).fetchone()
             if existing:
                 return _filters_response(
@@ -120,7 +128,7 @@ def add_content_filter(
 
             now = datetime.now(timezone.utc).isoformat()
             conn.execute(
-                "INSERT INTO content_filters (pattern, filter_type, enabled, description, created_at) "
+                f"INSERT INTO {table} (pattern, filter_type, enabled, description, created_at) "
                 "VALUES (?, ?, 1, ?, ?)",
                 (pattern, filter_type, description.strip(), now),
             )
@@ -149,16 +157,16 @@ def toggle_content_filter(
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
 
-    db_path = script["db_path"]
+    db_path, table = _resolve_filter_target(script)
     try:
         conn = get_crawler_db_rw(db_path)
         try:
-            row = conn.execute("SELECT enabled FROM content_filters WHERE id = ?", (filter_id,)).fetchone()
+            row = conn.execute(f"SELECT enabled FROM {table} WHERE id = ?", (filter_id,)).fetchone()
             if not row:
                 return _filters_response(request, script, flash="Filter not found.", flash_type="error")
 
             new_state = 0 if row["enabled"] else 1
-            conn.execute("UPDATE content_filters SET enabled = ? WHERE id = ?", (new_state, filter_id))
+            conn.execute(f"UPDATE {table} SET enabled = ? WHERE id = ?", (new_state, filter_id))
             conn.commit()
             label = "enabled" if new_state else "disabled"
         finally:
@@ -185,15 +193,15 @@ def delete_content_filter(
     if not script:
         raise HTTPException(status_code=404, detail="Script not found")
 
-    db_path = script["db_path"]
+    db_path, table = _resolve_filter_target(script)
     try:
         conn = get_crawler_db_rw(db_path)
         try:
-            row = conn.execute("SELECT pattern FROM content_filters WHERE id = ?", (filter_id,)).fetchone()
+            row = conn.execute(f"SELECT pattern FROM {table} WHERE id = ?", (filter_id,)).fetchone()
             if not row:
                 return _filters_response(request, script, flash="Filter not found.", flash_type="error")
             pattern = row["pattern"]
-            conn.execute("DELETE FROM content_filters WHERE id = ?", (filter_id,))
+            conn.execute(f"DELETE FROM {table} WHERE id = ?", (filter_id,))
             conn.commit()
         finally:
             conn.close()
@@ -209,16 +217,16 @@ def delete_content_filter(
 
 
 def _filters_response(request: Request, script, flash: str = None, flash_type: str = "info"):
-    db_path = script["db_path"]
+    db_path, table = _resolve_filter_target(script)
     filters = []
-    table_exists = _has_filters_table(db_path)
+    table_exists = _has_filters_table(db_path, table)
 
     if table_exists:
         try:
             conn = get_crawler_db(db_path)
             try:
                 filters = conn.execute(
-                    "SELECT * FROM content_filters ORDER BY id"
+                    f"SELECT * FROM {table} ORDER BY id"
                 ).fetchall()
                 filters = [dict(r) for r in filters]
             finally:

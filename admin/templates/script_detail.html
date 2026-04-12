@@ -77,6 +77,10 @@
       <a href="/scripts/{{ script.id }}/content-filters">Content Filters</a> |
       <a href="/data/{{ script.id }}/articles">Browse Articles</a> |
       <a href="/data/{{ script.id }}/support-crawl-history">Crawl History</a>
+      {% elif db_type == 'offers' %}
+      <a href="/scripts/{{ script.id }}/content-filters">Content Filters</a> |
+      <a href="/data/{{ script.id }}/offers">Browse Offers</a> |
+      <a href="/data/{{ script.id }}/offers-crawl-history">Crawl History</a>
       {% else %}
       <a href="/data/{{ script.id }}/products">Browse Data</a> |
       <a href="/data/{{ script.id }}/crawl-history">Crawl History</a>
@@ -90,7 +94,7 @@
   <header><strong>Recent Crawl Stats</strong> (last 50 runs)</header>
   <div style="overflow-x: auto;">
     <table>
-      <thead><tr><th>Run Time</th><th>{% if db_type == 'support' %}Articles Found{% else %}Products Found{% endif %}</th></tr></thead>
+      <thead><tr><th>Run Time</th><th>{% if db_type == 'support' %}Articles Found{% elif db_type == 'offers' %}Offers Found{% else %}Products Found{% endif %}</th></tr></thead>
       <tbody>
         {% for row in crawl_stats %}
         <tr><td><span class="utc-time" data-utc="{{ row.run_at }}">{{ row.run_at }}</span></td><td>{{ row.item_count }}</td></tr>

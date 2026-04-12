@@ -10,7 +10,7 @@
 <div style="overflow-x: auto;">
   <table>
     <thead>
-      <tr><th>Run Time</th><th>{% if db_type == 'support' %}Articles Found{% else %}Products Found{% endif %}</th></tr>
+      <tr><th>Run Time</th><th>{% if db_type == 'support' %}Articles Found{% elif db_type == 'offers' %}Offers Found{% else %}Products Found{% endif %}</th></tr>
     </thead>
     <tbody>
       {% for row in stats %}
@@ -25,20 +25,15 @@
 
 {% if total_pages > 1 %}
 <nav style="text-align: center;">
+  {% if db_type == 'support' %}{% set hist_path = '/data/' ~ script.id ~ '/support-crawl-history' %}
+  {% elif db_type == 'offers' %}{% set hist_path = '/data/' ~ script.id ~ '/offers-crawl-history' %}
+  {% else %}{% set hist_path = '/data/' ~ script.id ~ '/crawl-history' %}{% endif %}
   {% if page > 1 %}
-    {% if db_type == 'support' %}
-    <a href="/data/{{ script.id }}/support-crawl-history?page={{ page - 1 }}">&larr; Previous</a>
-    {% else %}
-    <a href="/data/{{ script.id }}/crawl-history?page={{ page - 1 }}">&larr; Previous</a>
-    {% endif %}
+    <a href="{{ hist_path }}?page={{ page - 1 }}">&larr; Previous</a>
   {% endif %}
   <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
   {% if page < total_pages %}
-    {% if db_type == 'support' %}
-    <a href="/data/{{ script.id }}/support-crawl-history?page={{ page + 1 }}">Next &rarr;</a>
-    {% else %}
-    <a href="/data/{{ script.id }}/crawl-history?page={{ page + 1 }}">Next &rarr;</a>
-    {% endif %}
+    <a href="{{ hist_path }}?page={{ page + 1 }}">Next &rarr;</a>
   {% endif %}
 </nav>
 {% endif %}
@@ -46,6 +41,8 @@
 <p>
   {% if db_type == 'support' %}
   <a href="/data/{{ script.id }}/articles">Browse Articles</a> |
+  {% elif db_type == 'offers' %}
+  <a href="/data/{{ script.id }}/offers">Browse Offers</a> |
   {% else %}
   <a href="/data/{{ script.id }}/products">Browse Products</a> |
   {% endif %}

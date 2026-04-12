@@ -107,7 +107,7 @@
         <input type="color" id="discord_embed_color" name="discord_embed_color"
                value="{{ discord.config.get('embed_color', '#FBA919') }}"
                style="width: 60px; height: 40px; padding: 2px; cursor: pointer;">
-        <small>Used for {{ 'content' if is_support else 'variant' }} changes and general embeds. New {{ 'articles' if is_support else 'products' }} are always green, removed are red, heartbeat is blue.</small>
+        <small>Used for {% if is_support %}content{% elif is_offers %}offer detail{% else %}variant{% endif %} changes and general embeds. New {% if is_support %}articles{% elif is_offers %}offers{% else %}products{% endif %} are always green, removed are red, heartbeat is blue.</small>
       </div>
     </fieldset>
 
@@ -118,17 +118,17 @@
       <label>
         <input type="checkbox" name="notify_new_products"
                {% if discord.config.get('notify_new_products', true) %}checked{% endif %}>
-        New {{ 'articles' if is_support else 'products' }} added
+        New {% if is_support %}articles{% elif is_offers %}offers{% else %}products{% endif %} added
       </label>
       <label>
         <input type="checkbox" name="notify_removed_products"
                {% if discord.config.get('notify_removed_products', true) %}checked{% endif %}>
-        {{ 'Articles' if is_support else 'Products' }} removed
+        {% if is_support %}Articles{% elif is_offers %}Offers{% else %}Products{% endif %} removed
       </label>
       <label>
         <input type="checkbox" name="notify_variant_changes"
                {% if discord.config.get('notify_variant_changes', true) %}checked{% endif %}>
-        {% if is_support %}Title / body / URL changes{% else %}Price / availability / variant changes{% endif %}
+        {% if is_support %}Title / body / URL changes{% elif is_offers %}Offer details changed (title / body / CTA / expiration){% else %}Price / availability / variant changes{% endif %}
       </label>
       <label>
         <input type="checkbox" name="notify_heartbeat"
@@ -161,17 +161,17 @@
         <label>
           <input type="checkbox" name="mention_on_new"
                  {% if discord.config.get('mention_on_new', true) %}checked{% endif %}>
-          New {{ 'articles' if is_support else 'products' }}
+          New {% if is_support %}articles{% elif is_offers %}offers{% else %}products{% endif %}
         </label>
         <label>
           <input type="checkbox" name="mention_on_removed"
                  {% if discord.config.get('mention_on_removed', false) %}checked{% endif %}>
-          Removed {{ 'articles' if is_support else 'products' }}
+          Removed {% if is_support %}articles{% elif is_offers %}offers{% else %}products{% endif %}
         </label>
         <label>
           <input type="checkbox" name="mention_on_changes"
                  {% if discord.config.get('mention_on_changes', false) %}checked{% endif %}>
-          {% if is_support %}Content changes{% else %}Variant changes{% endif %}
+          {% if is_support %}Content changes{% elif is_offers %}Offer detail changes{% else %}Variant changes{% endif %}
         </label>
       </div>
     </fieldset>

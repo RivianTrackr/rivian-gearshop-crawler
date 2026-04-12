@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ offer.title }} — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>{{ offer.title }}</h2>
+  <p>
+    <code>{{ offer.slug }}</code>
+    {% if offer.removed %} &mdash; <mark class="error">Removed</mark>{% endif %}
+  </p>
+</hgroup>
+
+<article>
+  <header><strong>Offer Info</strong></header>
+  <table>
+    <tr><td>URL</td><td><a href="{{ offer.url }}" target="_blank">{{ offer.url }}</a></td></tr>
+    <tr><td>CTA URL</td><td>{% if offer.cta_url %}<a href="{{ offer.cta_url }}" target="_blank">{{ offer.cta_url }}</a>{% else %}—{% endif %}</td></tr>
+    <tr><td>Expiration</td><td>{{ offer.expiration or '—' }}</td></tr>
+    <tr><td>First Seen</td><td><span class="utc-time" data-utc="{{ offer.first_seen_at }}">{{ offer.first_seen_at }}</span></td></tr>
+    <tr><td>Last Seen</td><td><span class="utc-time" data-utc="{{ offer.last_seen_at }}">{{ offer.last_seen_at }}</span></td></tr>
+    <tr><td>Last Updated</td><td><span class="utc-time" data-utc="{{ offer.updated_at }}">{{ offer.updated_at }}</span></td></tr>
+    <tr><td>Content Hash</td><td><code style="font-size:0.75rem">{{ offer.body_hash[:16] }}...</code></td></tr>
+  </table>
+</article>
+
+<article>
+  <header><strong>Current Content</strong></header>
+  <pre style="max-height: 400px; overflow-y: auto; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word;">{{ offer.body_text }}</pre>
+</article>
+
+{% if snapshot_diffs %}
+<article>
+  <header><strong>Snapshot History</strong> ({{ snapshot_diffs|length }} snapshots)</header>
+
+  {% for item in snapshot_diffs %}
+  <details {% if loop.first and (item.diff_html or item.title_changed or item.url_changed) %}open{% endif %}>
+    <summary>
+      <span class="utc-time" data-utc="{{ item.snapshot.crawled_at }}">{{ item.snapshot.crawled_at }}</span>
+      &mdash; <code style="font-size:0.7rem">{{ item.snapshot.body_hash[:12] }}...</code>
+      {% if item.diff_html %} <mark>content changed</mark>{% endif %}
+      {% if item.title_changed %} <mark>title changed</mark>{% endif %}
+      {% if item.url_changed %} <mark>URL changed</mark>{% endif %}
+      {% if loop.last %} <small>(initial snapshot)</small>{% endif %}
+    </summary>
+
+    {% if item.title_changed %}
+    <p><strong>Title:</strong> {{ item.snapshot.title }}</p>
+    {% endif %}
+
+    {% if item.url_changed %}
+    <p><strong>URL:</strong> {{ item.snapshot.url }}</p>
+    {% endif %}
+
+    {% if item.snapshot.cta_url %}
+    <p><strong>CTA:</strong> <a href="{{ item.snapshot.cta_url }}" target="_blank">{{ item.snapshot.cta_url }}</a></p>
+    {% endif %}
+
+    {% if item.snapshot.expiration %}
+    <p><strong>Expiration:</strong> {{ item.snapshot.expiration }}</p>
+    {% endif %}
+
+    {% if item.diff_html %}
+    <div style="border:1px solid #d2d2d7;padding:8px;border-radius:4px;max-height:300px;overflow-y:auto;margin:8px 0;font-size:0.8rem;">
+      {{ item.diff_html | safe }}
+    </div>
+    {% endif %}
+  </details>
+  {% endfor %}
+</article>
+{% endif %}
+
+<p>
+  <a href="/data/{{ script.id }}/offers">&larr; Back to offers</a> |
+  <a href="/scripts/{{ script.id }}">Script detail</a>
+</p>
+{% endblock %}

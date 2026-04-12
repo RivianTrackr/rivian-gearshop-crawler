@@ -61,6 +61,17 @@ SUPPORT_SCRIPT = {
     "description": "Monitors Rivian Support articles for content changes and sends email alerts.",
 }
 
+OFFERS_SCRIPT = {
+    "name": "rivian-offers-crawler",
+    "display_name": "Rivian Offers Crawler",
+    "service_unit": "rivian-offers-crawler.service",
+    "timer_unit": "rivian-offers-crawler.timer",
+    "env_file_path": "/opt/rivian-gearshop-crawler/.env",
+    "db_path": "/opt/rivian-gearshop-crawler/offers.db",
+    "working_directory": "/opt/rivian-gearshop-crawler",
+    "description": "Monitors rivian.com/offers for new/removed/changed promotional offers",
+}
+
 
 def get_admin_db() -> sqlite3.Connection:
     conn = sqlite3.connect(ADMIN_DB_PATH)
@@ -109,7 +120,7 @@ def init_admin_db():
 
     # Seed default managed scripts if they don't exist
     now = datetime.now(timezone.utc).isoformat()
-    for script_def in (DEFAULT_SCRIPT, SUPPORT_SCRIPT):
+    for script_def in (DEFAULT_SCRIPT, SUPPORT_SCRIPT, OFFERS_SCRIPT):
         existing = conn.execute(
             "SELECT 1 FROM managed_scripts WHERE name = ?", (script_def["name"],)
         ).fetchone()

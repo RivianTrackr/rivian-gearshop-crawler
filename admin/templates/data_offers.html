@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Offers — {{ script.display_name }}{% endblock %}
+
+{% block content %}
+<hgroup>
+  <h2>Offers — {{ script.display_name }}</h2>
+  <p>{{ total }} offers total</p>
+</hgroup>
+
+<form method="get" action="/data/{{ script.id }}/offers" style="margin-bottom: 1rem;">
+  <div role="group">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by title or slug...">
+    <button type="submit">Search</button>
+  </div>
+</form>
+
+<div style="overflow-x: auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Slug</th>
+        <th>CTA</th>
+        <th>Expiration</th>
+        <th>Status</th>
+        <th>Snapshots</th>
+        <th>Last Seen</th>
+        <th>First Seen</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in offers %}
+      <tr>
+        <td>{{ o.title or '—' }}</td>
+        <td><code>{{ o.slug }}</code></td>
+        <td>
+          {% if o.cta_url %}
+            <a href="{{ o.cta_url }}" target="_blank" rel="noopener">Link</a>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ o.expiration or '—' }}</td>
+        <td>
+          {% if o.removed %}
+            <mark class="error">Removed</mark>
+          {% else %}
+            <mark>Active</mark>
+          {% endif %}
+        </td>
+        <td>{{ o.snapshot_count }}</td>
+        <td><span class="utc-time" data-utc="{{ o.last_seen_at }}">{{ o.last_seen_at }}</span></td>
+        <td><span class="utc-time" data-utc="{{ o.first_seen_at }}">{{ o.first_seen_at }}</span></td>
+        <td><a href="/data/{{ script.id }}/offers/{{ o.id }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<nav style="text-align: center;">
+  {% if page > 1 %}
+    <a href="/data/{{ script.id }}/offers?page={{ page - 1 }}&q={{ q }}">&larr; Previous</a>
+  {% endif %}
+  <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="/data/{{ script.id }}/offers?page={{ page + 1 }}&q={{ q }}">Next &rarr;</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+<p>
+  <a href="/data/{{ script.id }}/export-offers.csv" role="button" class="outline secondary" style="padding:4px 12px;display:inline-block">Export CSV</a>
+  <a href="/data/{{ script.id }}/export-offers.json" role="button" class="outline secondary" style="padding:4px 12px;display:inline-block">Export JSON</a>
+  |
+  <a href="/data/{{ script.id }}/offers-crawl-history">View Crawl History</a> |
+  <a href="/scripts/{{ script.id }}">&larr; Back to script detail</a>
+</p>
+{% endblock %}
