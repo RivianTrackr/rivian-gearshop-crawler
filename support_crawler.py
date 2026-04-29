@@ -164,7 +164,7 @@ def today_utc_str() -> str:
 # ---------------------- SQLite ----------------------
 
 def db():
-    conn = sqlite3.connect(SUPPORT_DB_PATH, timeout=10)
+    conn = sqlite3.connect(SUPPORT_DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
