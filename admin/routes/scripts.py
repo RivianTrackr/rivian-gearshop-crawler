@@ -6,6 +6,10 @@ import os
 from admin.auth import verify_csrf
 
 from admin.db import get_crawler_db
+from admin.dbops import (
+    check_lock_status, find_lock_holders, force_unlock,
+    get_db_files_info, wal_checkpoint,
+)
 from admin.systemd import (
     get_service_status, get_timer_active,
     start_service, stop_service, get_journal_logs,
@@ -21,8 +25,15 @@ templates = Jinja2Templates(
 CRAWL_STATS_LIMIT = 50
 
 
-@router.get("/scripts/{script_id}", response_class=HTMLResponse)
-def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=10, le=1000)):
+def _render_detail(
+    request: Request,
+    script_id: int,
+    lines: int = 100,
+    flash: str | None = None,
+    flash_type: str = "info",
+) -> HTMLResponse:
+    """Render the script detail page. Shared by the GET handler and the
+    DB-health POST handlers so they can show a flash message on the same view."""
     script = _get_script(script_id)
     if not script:
         return RedirectResponse("/", status_code=303)
@@ -64,6 +75,12 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
 
     units_installed = is_unit_installed(script["service_unit"])
 
+    # DB Health: file sizes, lock probe, lsof holders. All best-effort —
+    # any failure is shown in the panel, never raised.
+    db_files = get_db_files_info(script["db_path"]) if script["db_path"] else None
+    lock_status = check_lock_status(script["db_path"]) if script["db_path"] else None
+    lock_holders = find_lock_holders(script["db_path"]) if script["db_path"] else None
+
     return templates.TemplateResponse("script_detail.html", {
         "request": request,
         "script": script,
@@ -74,8 +91,18 @@ def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=1
         "log_lines": lines,
         "crawl_stats": crawl_stats,
         "db_type": db_type,
+        "db_files": db_files,
+        "lock_status": lock_status,
+        "lock_holders": lock_holders,
+        "flash_message": flash,
+        "flash_type": flash_type,
         "csrf_token": request.state.csrf_token,
     })
+
+
+@router.get("/scripts/{script_id}", response_class=HTMLResponse)
+def script_detail(request: Request, script_id: int, lines: int = Query(100, ge=10, le=1000)):
+    return _render_detail(request, script_id, lines=lines)
 
 
 @router.post("/scripts/{script_id}/start")
@@ -120,6 +147,73 @@ def script_disable_timer(request: Request, script_id: int, csrf: str = Depends(v
     if script and script["timer_unit"]:
         disable_service(script["timer_unit"])
     return RedirectResponse(f"/scripts/{script_id}", status_code=303)
+
+
+@router.post("/scripts/{script_id}/db-checkpoint", response_class=HTMLResponse)
+def script_db_checkpoint(request: Request, script_id: int, csrf: str = Depends(verify_csrf)):
+    """Run PRAGMA wal_checkpoint(TRUNCATE) on the crawler's DB. Safe anytime."""
+    script = _get_script(script_id)
+    if not script:
+        return RedirectResponse("/", status_code=303)
+    if not script["db_path"]:
+        return _render_detail(
+            request, script_id,
+            flash="No DB path configured for this script.",
+            flash_type="error",
+        )
+
+    ok, info = wal_checkpoint(script["db_path"], mode="TRUNCATE")
+    if ok:
+        msg = (
+            f"Checkpoint complete: {info['checkpointed_pages']} pages flushed, "
+            f"{info['log_pages']} remaining in WAL"
+        )
+        if info["busy"]:
+            msg += " (another connection was busy — partial checkpoint)"
+            flash_type = "warning"
+        else:
+            flash_type = "success"
+    else:
+        msg = f"Checkpoint failed: {info.get('error', 'unknown error')}"
+        flash_type = "error"
+    return _render_detail(request, script_id, flash=msg, flash_type=flash_type)
+
+
+@router.post("/scripts/{script_id}/db-force-unlock", response_class=HTMLResponse)
+def script_db_force_unlock(
+    request: Request,
+    script_id: int,
+    csrf: str = Depends(verify_csrf),
+):
+    """Stop service + timer, wait for exit, then run a TRUNCATE checkpoint.
+
+    Heavy-handed recovery for when a checkpoint won't take because something
+    is still holding the WAL. Caller must re-enable the timer manually after.
+    """
+    script = _get_script(script_id)
+    if not script:
+        return RedirectResponse("/", status_code=303)
+    if not script["db_path"] or not script["service_unit"]:
+        return _render_detail(
+            request, script_id,
+            flash="DB path or service unit not configured for this script.",
+            flash_type="error",
+        )
+
+    ok, summary = force_unlock(
+        db_path=script["db_path"],
+        service_unit=script["service_unit"],
+        timer_unit=script["timer_unit"],
+    )
+    flash = (
+        f"Force unlock {'succeeded' if ok else 'completed with warnings'}: {summary}. "
+        "Re-enable the timer below if you want scheduled runs to resume."
+    )
+    return _render_detail(
+        request, script_id,
+        flash=flash,
+        flash_type="success" if ok else "warning",
+    )
 
 
 @router.get("/scripts/{script_id}/logs", response_class=HTMLResponse)

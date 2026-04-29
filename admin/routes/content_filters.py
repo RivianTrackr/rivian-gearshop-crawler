@@ -290,18 +290,27 @@ def reset_crawler_data(
                 except Exception as e:
                     logger.warning("Reset: could not clear %s: %s", t, e)
                     deleted[t] = -1
-            # Reclaim space and reset autoincrement counters.
+            # Reset autoincrement counters in the same txn as the deletes.
             try:
                 conn.execute("DELETE FROM sqlite_sequence")
             except Exception:
                 pass
             conn.commit()
-            try:
-                conn.execute("VACUUM")
-            except Exception:
-                pass
         finally:
             conn.close()
+        # VACUUM must run outside any transaction and takes an exclusive
+        # lock for its full duration. Run it on a fresh connection so the
+        # deletes are durable even if VACUUM races with a live crawler.
+        # Failures here are non-fatal — space will be reclaimed eventually.
+        try:
+            vac = get_crawler_db_rw(db_path)
+            try:
+                vac.isolation_level = None  # autocommit so VACUUM can proceed
+                vac.execute("VACUUM")
+            finally:
+                vac.close()
+        except Exception as e:
+            logger.warning("Reset: VACUUM skipped (%s)", e)
     except Exception as e:
         logger.error("Failed to reset crawler data: %s", e)
         return _filters_response(

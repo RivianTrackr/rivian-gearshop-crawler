@@ -13,6 +13,12 @@
 </article>
 {% endif %}
 
+{% if flash_message %}
+<article class="alert-{{ flash_type or 'info' }}">
+  {{ flash_message }}
+</article>
+{% endif %}
+
 <div class="grid">
   <article>
     <header><strong>Service Status</strong></header>
@@ -88,6 +94,104 @@
     </footer>
   </article>
 </div>
+
+{% if db_files %}
+<article>
+  <header>
+    <strong>Database Health</strong>
+    <span style="font-family: monospace; font-size: 0.85em; opacity: 0.7; margin-left: 0.5rem;">{{ db_files.db_path }}</span>
+  </header>
+  <div class="grid">
+    <div>
+      <table>
+        <tr>
+          <td>Lock status</td>
+          <td>
+            {% if not lock_status or not lock_status.exists %}
+              <em>DB file does not exist yet</em>
+            {% elif lock_status.locked %}
+              <mark class="error">Locked</mark>
+              {% if lock_status.error %}
+              <br><small style="opacity:0.7">{{ lock_status.error }}</small>
+              {% endif %}
+            {% else %}
+              <mark class="success">Free</mark>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>Main DB</td>
+          <td>
+            {% if db_files.main %}
+              {{ db_files.main.size_human }}
+              <br><small style="opacity:0.7">modified <span class="utc-time" data-utc="{{ db_files.main.mtime_iso }}">{{ db_files.main.mtime_iso }}</span></small>
+            {% else %}
+              <em>missing</em>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>WAL file</td>
+          <td>
+            {% if db_files.wal %}
+              {{ db_files.wal.size_human }}
+              {% if db_files.wal.size_bytes > 50 * 1024 * 1024 %}
+                <mark class="warning">large</mark>
+              {% endif %}
+              <br><small style="opacity:0.7">modified <span class="utc-time" data-utc="{{ db_files.wal.mtime_iso }}">{{ db_files.wal.mtime_iso }}</span></small>
+            {% else %}
+              <em>none (already checkpointed)</em>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>SHM file</td>
+          <td>{% if db_files.shm %}{{ db_files.shm.size_human }}{% else %}<em>none</em>{% endif %}</td>
+        </tr>
+      </table>
+    </div>
+    <div>
+      <strong>Open file holders</strong>
+      {% if not lock_holders %}
+        <p><em>No data — DB file does not exist.</em></p>
+      {% elif not lock_holders.available %}
+        <p><em>{{ lock_holders.error or 'lsof unavailable' }} — cannot list holders.</em></p>
+      {% elif not lock_holders.holders %}
+        <p><em>No processes currently have the DB open.</em></p>
+      {% else %}
+        <table>
+          <thead><tr><th>PID</th><th>Command</th><th>Files</th></tr></thead>
+          <tbody>
+            {% for h in lock_holders.holders %}
+            <tr>
+              <td><code>{{ h.pid }}</code></td>
+              <td>{{ h.command }}</td>
+              <td><small>{{ h.files | join(', ') }}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+        <form method="post" action="/scripts/{{ script.id }}/db-checkpoint" style="margin:0">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button type="submit" class="outline">Force WAL checkpoint</button>
+        </form>
+        <form method="post" action="/scripts/{{ script.id }}/db-force-unlock" style="margin:0"
+              data-confirm="Stop the {{ script.display_name }} service and timer, then truncate the WAL. Continue?">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button type="submit" class="outline contrast">Stop service + force unlock</button>
+        </form>
+        <small style="opacity:0.7">
+          <strong>Checkpoint</strong> is safe anytime — flushes WAL into the main DB.
+          <strong>Force unlock</strong> stops the systemd service first; you'll need to re-enable the timer afterwards.
+        </small>
+      </div>
+    </div>
+  </div>
+</article>
+{% endif %}
 
 {% if crawl_stats %}
 <article>
