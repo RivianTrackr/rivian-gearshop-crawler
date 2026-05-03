@@ -44,12 +44,6 @@ def infer_availability_from_html(handle, variant_id, site_root, headers, log=lam
                         res = True if "instock" in avail else False if "outofstock" in avail else None
                         _avail_cache[key] = res
                         return res
-                if any(isinstance(o, dict) and "instock" in (o.get("availability","").lower()) for o in offer_list):
-                    _avail_cache[key] = True
-                    return True
-                if offer_list and all(isinstance(o, dict) and "outofstock" in (o.get("availability","").lower()) for o in offer_list):
-                    _avail_cache[key] = False
-                    return False
 
         add_btn = soup.select_one("button[name='add'], button[type='submit'][name='add']")
         if add_btn:

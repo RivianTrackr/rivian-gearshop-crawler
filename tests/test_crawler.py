@@ -146,6 +146,31 @@ class TestDatabaseHelpers:
         assert snap["price_cents"] == 200
         assert snap["available"] == 0
 
+    def test_recent_snapshots_for_variant_none(self, crawler_db):
+        assert crawler.recent_snapshots_for_variant(crawler_db, 999) == []
+
+    def test_recent_snapshots_for_variant_returns_two_newest(self, crawler_db):
+        crawler_db.execute(
+            "INSERT INTO products (product_id, handle) VALUES (1, 'test')"
+        )
+        crawler_db.execute(
+            "INSERT INTO variants (variant_id, product_id) VALUES (1, 1)"
+        )
+        for crawled_at, avail in [
+            ("2024-01-01", 1),
+            ("2024-01-02", 0),
+            ("2024-01-03", 1),
+        ]:
+            crawler_db.execute(
+                "INSERT INTO snapshots (crawled_at, product_id, variant_id, price_cents, available) VALUES (?, 1, 1, 100, ?)",
+                (crawled_at, avail),
+            )
+        crawler_db.commit()
+        rows = crawler.recent_snapshots_for_variant(crawler_db, 1, limit=2)
+        assert len(rows) == 2
+        assert rows[0]["available"] == 1  # newest
+        assert rows[1]["available"] == 0  # second-newest
+
 
 class TestHeartbeat:
     def test_heartbeat_disabled(self, crawler_db):

@@ -302,6 +302,13 @@ def latest_snapshot_for_variant(conn, variant_id):
     )
     return cur.fetchone()
 
+def recent_snapshots_for_variant(conn, variant_id, limit=2):
+    cur = conn.execute(
+        "SELECT * FROM snapshots WHERE variant_id=? ORDER BY snapshot_id DESC LIMIT ?",
+        (variant_id, limit)
+    )
+    return cur.fetchall()
+
 def has_any_snapshot(conn):
     cur = conn.execute("SELECT 1 FROM snapshots LIMIT 1")
     return cur.fetchone() is not None
@@ -917,7 +924,9 @@ def main():
                             else:
                                 log(f"    avail: html=SKIPPED (cap {get_avail_html_checks()}/{AVAIL_HTML_MAX})")
 
-                prev = latest_snapshot_for_variant(conn, vid)
+                recent = recent_snapshots_for_variant(conn, vid, limit=2)
+                prev = recent[0] if recent else None
+                prev2 = recent[1] if len(recent) >= 2 else None
                 cur.execute("""
                   INSERT INTO snapshots (crawled_at, product_id, variant_id, price_cents, compare_at_cents, available)
                   VALUES (?, ?, ?, ?, ?, ?)
@@ -942,8 +951,12 @@ def main():
                             changes.append(f"Price {render_money(prev['price_cents'])} → {render_money(price)}")
                         if (prev["compare_at_cents"] or 0) != (compare_at or 0):
                             changes.append(f"CompareAt {render_money(prev['compare_at_cents'])} → {render_money(compare_at)}")
-                        if (prev["available"] or 0) != (available or 0):
-                            changes.append(f"Availability {'Yes' if prev['available'] else 'No'} → {'Yes' if available else 'No'}")
+                        prev_avail = prev["available"] or 0
+                        prev2_avail = (prev2["available"] or 0) if prev2 else None
+                        if available == prev_avail and prev2_avail is not None and prev_avail != prev2_avail:
+                            # Confirmation run: prev2 → prev was a flip, and the current snapshot
+                            # confirms it. Report against prev2 so the user sees the real transition.
+                            changes.append(f"Availability {'Yes' if prev2_avail else 'No'} → {'Yes' if available else 'No'}")
                         if changes:
                             diffs.append({
                                 "url": handle_to_url[handle],

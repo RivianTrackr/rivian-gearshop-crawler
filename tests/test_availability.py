@@ -149,11 +149,14 @@ class TestInferAvailabilityFromHtml:
         assert get_avail_html_checks() == 0
 
 
-class TestAllOffersOutOfStock:
-    """Test when all offers in JSON-LD are out of stock."""
+class TestNoVariantSpecificMatch:
+    """When no offer's URL matches the queried variant_id, the result must be None.
+    Loose product-level fallbacks ('any offer instock' / 'all offers outofstock')
+    were removed because they conflated product state with variant state and
+    caused availability to flap run-to-run."""
 
     @patch("availability.requests.get")
-    def test_all_out_of_stock(self, mock_get):
+    def test_all_out_of_stock_no_url_match(self, mock_get):
         json_ld = {
             "@type": "Product",
             "offers": [
@@ -166,10 +169,10 @@ class TestAllOffersOutOfStock:
         result = infer_availability_from_html(
             "test", 999, "https://gearshop.rivian.com", {}
         )
-        assert result is False
+        assert result is None
 
     @patch("availability.requests.get")
-    def test_any_in_stock(self, mock_get):
+    def test_any_in_stock_no_url_match(self, mock_get):
         json_ld = {
             "@type": "Product",
             "offers": [
@@ -182,4 +185,4 @@ class TestAllOffersOutOfStock:
         result = infer_availability_from_html(
             "test", 999, "https://gearshop.rivian.com", {}
         )
-        assert result is True
+        assert result is None
