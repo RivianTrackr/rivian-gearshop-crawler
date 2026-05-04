@@ -309,28 +309,42 @@ def recent_snapshots_for_variant(conn, variant_id, limit=2):
     )
     return cur.fetchall()
 
-def availability_change_to_report(current, prev_avail, prev2_avail, prev3_avail):
-    """Return a 'Availability X → Y' string when a real transition is confirmed,
-    else None.
+AVAILABILITY_DEBOUNCE_RUNS = 3
 
-    Rule: emit only when the new value has held for 2 runs (current == prev),
-    the old value had held for at least 2 runs (prev2 == prev3), and there was
-    an actual flip between them (prev != prev2). This absorbs single-run blips
-    on either side of a stable value, which would otherwise fire false
-    'Availability' notifications every time a transient blip recovered to the
-    real stable value.
+def availability_change_to_report(current, recent_avails, debounce_runs=AVAILABILITY_DEBOUNCE_RUNS):
+    """Return 'Availability X → Y' when a real transition is confirmed, else None.
 
-    Inputs are 0/1 ints; prev2 and prev3 may be None on a young variant (in
-    which case we conservatively emit nothing).
+    `recent_avails` is a list of prior availability values (0/1 ints, or None
+    if no data exists for that slot), newest first.
+
+    Rule: emit only when the new value has held for `debounce_runs` runs
+    (counting the current run) AND the prior value also held for
+    `debounce_runs` runs AND the two windows differ. This absorbs blips
+    shorter than `debounce_runs` on either side of a stable value, which
+    would otherwise fire false 'Availability' notifications every time a
+    transient blip recovered to the real stable value.
+
+    With debounce_runs=3, we need 5 prior + current (6 total) showing
+    pattern V',V',V',V,V,V where V != V'. This absorbs 1-run and 2-run
+    blips. Real changes are reported (debounce_runs - 1) hours after the
+    transition; production data shows 2-run blips are common, so 3 is
+    the smallest window that's actually quiet.
     """
-    if prev_avail is None or prev2_avail is None or prev3_avail is None:
+    needed = 2 * debounce_runs - 1
+    if len(recent_avails) < needed:
         return None
+    if any(v is None for v in recent_avails[:needed]):
+        return None
+    new_window = [current] + list(recent_avails[: debounce_runs - 1])
+    old_window = list(recent_avails[debounce_runs - 1 : needed])
+    new_val = new_window[0]
+    old_val = old_window[0]
     if (
-        current == prev_avail
-        and prev_avail != prev2_avail
-        and prev2_avail == prev3_avail
+        all(v == new_val for v in new_window)
+        and all(v == old_val for v in old_window)
+        and new_val != old_val
     ):
-        return f"Availability {'Yes' if prev2_avail else 'No'} → {'Yes' if current else 'No'}"
+        return f"Availability {'Yes' if old_val else 'No'} → {'Yes' if current else 'No'}"
     return None
 
 def has_any_snapshot(conn):
@@ -948,10 +962,9 @@ def main():
                             else:
                                 log(f"    avail: html=SKIPPED (cap {get_avail_html_checks()}/{AVAIL_HTML_MAX})")
 
-                recent = recent_snapshots_for_variant(conn, vid, limit=3)
+                recent = recent_snapshots_for_variant(conn, vid, limit=2 * AVAILABILITY_DEBOUNCE_RUNS - 1)
                 prev = recent[0] if recent else None
-                prev2 = recent[1] if len(recent) >= 2 else None
-                prev3 = recent[2] if len(recent) >= 3 else None
+                recent_avails = [(r["available"] or 0) for r in recent]
                 cur.execute("""
                   INSERT INTO snapshots (crawled_at, product_id, variant_id, price_cents, compare_at_cents, available)
                   VALUES (?, ?, ?, ?, ?, ?)
@@ -976,12 +989,7 @@ def main():
                             changes.append(f"Price {render_money(prev['price_cents'])} → {render_money(price)}")
                         if (prev["compare_at_cents"] or 0) != (compare_at or 0):
                             changes.append(f"CompareAt {render_money(prev['compare_at_cents'])} → {render_money(compare_at)}")
-                        avail_change = availability_change_to_report(
-                            available,
-                            prev["available"] or 0,
-                            (prev2["available"] or 0) if prev2 else None,
-                            (prev3["available"] or 0) if prev3 else None,
-                        )
+                        avail_change = availability_change_to_report(available, recent_avails)
                         if avail_change:
                             changes.append(avail_change)
                         if changes:
