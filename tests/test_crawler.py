@@ -172,6 +172,97 @@ class TestDatabaseHelpers:
         assert rows[1]["available"] == 0  # second-newest
 
 
+class TestAvailabilityChangeToReport:
+    """The debounce rule: emit only when the new value held for 2 runs AND
+    the old value held for at least 2 runs AND there was a flip between them.
+    Snapshot order in args is: current, prev, prev2, prev3 (newest → older).
+    """
+
+    def test_returns_none_when_history_too_short(self):
+        # New variant: no prior snapshots at all.
+        assert crawler.availability_change_to_report(1, None, None, None) is None
+        # Only one prior snapshot.
+        assert crawler.availability_change_to_report(1, 1, None, None) is None
+        # Only two prior snapshots.
+        assert crawler.availability_change_to_report(0, 0, 1, None) is None
+
+    def test_stable_returns_none(self):
+        # Last 4 runs all 1: nothing changed.
+        assert crawler.availability_change_to_report(1, 1, 1, 1) is None
+        # Last 4 runs all 0: nothing changed.
+        assert crawler.availability_change_to_report(0, 0, 0, 0) is None
+
+    def test_confirmed_yes_to_no_transition(self):
+        # Pattern: 1, 1, 0, 0 (oldest → newest). Old held 2 runs, new held 2 runs.
+        # Args (newest first): current=0, prev=0, prev2=1, prev3=1.
+        assert (
+            crawler.availability_change_to_report(0, 0, 1, 1)
+            == "Availability Yes → No"
+        )
+
+    def test_confirmed_no_to_yes_transition(self):
+        # Pattern: 0, 0, 1, 1 (oldest → newest).
+        assert (
+            crawler.availability_change_to_report(1, 1, 0, 0)
+            == "Availability No → Yes"
+        )
+
+    def test_single_run_blip_returning_to_old_value_does_not_emit(self):
+        # Real bug observed in production. Stable at 0, blip to 1, return to 0.
+        # Pattern: 0, 1, 0, 0 (oldest → newest). Args: current=0, prev=0, prev2=1, prev3=0.
+        # Old rule fired ("Yes → No"); new rule must not.
+        assert crawler.availability_change_to_report(0, 0, 1, 0) is None
+
+    def test_single_run_blip_returning_to_old_value_does_not_emit_inverse(self):
+        # Stable at 1, blip to 0, return to 1. Pattern: 1, 0, 1, 1.
+        # Args: current=1, prev=1, prev2=0, prev3=1.
+        assert crawler.availability_change_to_report(1, 1, 0, 1) is None
+
+    def test_change_just_observed_waits_for_confirmation(self):
+        # Pattern: 1, 1, 1, 0 (oldest → newest). Change just observed; not confirmed yet.
+        # Args: current=0, prev=1, prev2=1, prev3=1.
+        assert crawler.availability_change_to_report(0, 1, 1, 1) is None
+
+    def test_oscillating_data_does_not_emit(self):
+        # Pattern: 0, 1, 0, 1. Pure flap, no stable old value.
+        # Args: current=1, prev=0, prev2=1, prev3=0.
+        assert crawler.availability_change_to_report(1, 0, 1, 0) is None
+
+    def test_production_pattern_blk_006_no_false_emails(self):
+        """Walk the real AP000711-BLK-006 sequence and assert zero emits.
+
+        Chronological: 0,0,1,0,1,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0
+        At each step from index 3 onward, current = seq[i], prev = seq[i-1],
+        prev2 = seq[i-2], prev3 = seq[i-3]. The variant has been stable at 0
+        with single-run blips to 1 — there is no confirmed transition.
+        """
+        seq = [0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0]
+        emits = []
+        for i in range(3, len(seq)):
+            change = crawler.availability_change_to_report(
+                seq[i], seq[i - 1], seq[i - 2], seq[i - 3]
+            )
+            if change:
+                emits.append((i, change))
+        assert emits == [], f"Expected no emits, got {emits}"
+
+    def test_production_pattern_genuine_transition_does_emit(self):
+        """Walk a sequence with a clean transition and assert exactly one emit.
+
+        Chronological: 1,1,1,1,1,0,0,0,0 — stable in stock, then stable out.
+        Should emit "Yes → No" exactly once at index 6 (the second 0).
+        """
+        seq = [1, 1, 1, 1, 1, 0, 0, 0, 0]
+        emits = []
+        for i in range(3, len(seq)):
+            change = crawler.availability_change_to_report(
+                seq[i], seq[i - 1], seq[i - 2], seq[i - 3]
+            )
+            if change:
+                emits.append((i, change))
+        assert emits == [(6, "Availability Yes → No")], f"Got {emits}"
+
+
 class TestHeartbeat:
     def test_heartbeat_disabled(self, crawler_db):
         with patch.object(crawler, 'HEARTBEAT_UTC_HOUR', -1):
