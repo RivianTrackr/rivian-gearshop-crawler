@@ -309,6 +309,30 @@ def recent_snapshots_for_variant(conn, variant_id, limit=2):
     )
     return cur.fetchall()
 
+def availability_change_to_report(current, prev_avail, prev2_avail, prev3_avail):
+    """Return a 'Availability X → Y' string when a real transition is confirmed,
+    else None.
+
+    Rule: emit only when the new value has held for 2 runs (current == prev),
+    the old value had held for at least 2 runs (prev2 == prev3), and there was
+    an actual flip between them (prev != prev2). This absorbs single-run blips
+    on either side of a stable value, which would otherwise fire false
+    'Availability' notifications every time a transient blip recovered to the
+    real stable value.
+
+    Inputs are 0/1 ints; prev2 and prev3 may be None on a young variant (in
+    which case we conservatively emit nothing).
+    """
+    if prev_avail is None or prev2_avail is None or prev3_avail is None:
+        return None
+    if (
+        current == prev_avail
+        and prev_avail != prev2_avail
+        and prev2_avail == prev3_avail
+    ):
+        return f"Availability {'Yes' if prev2_avail else 'No'} → {'Yes' if current else 'No'}"
+    return None
+
 def has_any_snapshot(conn):
     cur = conn.execute("SELECT 1 FROM snapshots LIMIT 1")
     return cur.fetchone() is not None
@@ -924,9 +948,10 @@ def main():
                             else:
                                 log(f"    avail: html=SKIPPED (cap {get_avail_html_checks()}/{AVAIL_HTML_MAX})")
 
-                recent = recent_snapshots_for_variant(conn, vid, limit=2)
+                recent = recent_snapshots_for_variant(conn, vid, limit=3)
                 prev = recent[0] if recent else None
                 prev2 = recent[1] if len(recent) >= 2 else None
+                prev3 = recent[2] if len(recent) >= 3 else None
                 cur.execute("""
                   INSERT INTO snapshots (crawled_at, product_id, variant_id, price_cents, compare_at_cents, available)
                   VALUES (?, ?, ?, ?, ?, ?)
@@ -951,12 +976,14 @@ def main():
                             changes.append(f"Price {render_money(prev['price_cents'])} → {render_money(price)}")
                         if (prev["compare_at_cents"] or 0) != (compare_at or 0):
                             changes.append(f"CompareAt {render_money(prev['compare_at_cents'])} → {render_money(compare_at)}")
-                        prev_avail = prev["available"] or 0
-                        prev2_avail = (prev2["available"] or 0) if prev2 else None
-                        if available == prev_avail and prev2_avail is not None and prev_avail != prev2_avail:
-                            # Confirmation run: prev2 → prev was a flip, and the current snapshot
-                            # confirms it. Report against prev2 so the user sees the real transition.
-                            changes.append(f"Availability {'Yes' if prev2_avail else 'No'} → {'Yes' if available else 'No'}")
+                        avail_change = availability_change_to_report(
+                            available,
+                            prev["available"] or 0,
+                            (prev2["available"] or 0) if prev2 else None,
+                            (prev3["available"] or 0) if prev3 else None,
+                        )
+                        if avail_change:
+                            changes.append(avail_change)
                         if changes:
                             diffs.append({
                                 "url": handle_to_url[handle],
