@@ -1,6 +1,7 @@
 """Tests for support_crawler.py — content helpers, diff generation, and DB operations."""
 
 import sqlite3
+from unittest.mock import patch
 
 import pytest
 
@@ -13,6 +14,7 @@ from support_crawler import (
     generate_text_diff,
     generate_html_diff,
     build_changes_email,
+    _retry_on_db_locked,
 )
 
 
@@ -295,3 +297,67 @@ class TestDatabaseOperations:
         assert row["status"] == "success"
         assert row["article_count"] == 100
         assert row["new_articles"] == 5
+
+
+class TestRetryOnDbLocked:
+    """Verify the retry-on-locked wrapper handles transient SQLite contention
+    without burning real wall-clock time in tests."""
+
+    def test_returns_value_on_first_success(self):
+        calls = []
+        def fn():
+            calls.append(1)
+            return "ok"
+        assert _retry_on_db_locked(fn) == "ok"
+        assert len(calls) == 1
+
+    def test_retries_on_database_locked_then_succeeds(self):
+        calls = []
+        def fn():
+            calls.append(1)
+            if len(calls) < 3:
+                raise sqlite3.OperationalError("database is locked")
+            return "ok"
+        with patch("support_crawler.time.sleep") as sleep:
+            assert _retry_on_db_locked(fn, base_delay=0.01) == "ok"
+        assert len(calls) == 3
+        # Two backoffs before the third attempt succeeds.
+        assert sleep.call_count == 2
+
+    def test_reraises_after_exhausting_attempts(self):
+        def fn():
+            raise sqlite3.OperationalError("database is locked")
+        with patch("support_crawler.time.sleep"):
+            with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+                _retry_on_db_locked(fn, max_attempts=3, base_delay=0.01)
+
+    def test_does_not_retry_other_operational_errors(self):
+        calls = []
+        def fn():
+            calls.append(1)
+            raise sqlite3.OperationalError("no such table: support_articles")
+        with pytest.raises(sqlite3.OperationalError, match="no such table"):
+            _retry_on_db_locked(fn)
+        assert len(calls) == 1
+
+    def test_does_not_retry_unrelated_exceptions(self):
+        calls = []
+        def fn():
+            calls.append(1)
+            raise ValueError("boom")
+        with pytest.raises(ValueError, match="boom"):
+            _retry_on_db_locked(fn)
+        assert len(calls) == 1
+
+    def test_uses_exponential_backoff(self):
+        calls = []
+        def fn():
+            calls.append(1)
+            raise sqlite3.OperationalError("database is locked")
+        with patch("support_crawler.time.sleep") as sleep:
+            with pytest.raises(sqlite3.OperationalError):
+                _retry_on_db_locked(fn, max_attempts=4, base_delay=1.0)
+        # Sleep called between attempts: 1s, 2s, 4s. Last attempt re-raises
+        # without sleeping.
+        delays = [c.args[0] for c in sleep.call_args_list]
+        assert delays == [1.0, 2.0, 4.0]
