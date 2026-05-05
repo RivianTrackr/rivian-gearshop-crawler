@@ -164,9 +164,34 @@ def today_utc_str() -> str:
 # ---------------------- SQLite ----------------------
 
 def db():
-    conn = sqlite3.connect(SUPPORT_DB_PATH, timeout=30)
+    # 60s busy_timeout: covers brief admin-dashboard writes to the same DB
+    # (small INSERTs/UPDATEs/DELETEs against content_filters and friends).
+    # Genuinely longer locks (e.g., a manual VACUUM) are handled by the
+    # retry-on-locked wrapper around acquire-points.
+    conn = sqlite3.connect(SUPPORT_DB_PATH, timeout=60)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _retry_on_db_locked(fn, *, max_attempts=4, base_delay=1.0, label="operation"):
+    """Run fn(), retrying on 'database is locked' OperationalError with
+    exponential backoff (base_delay * 2**attempt seconds: 1, 2, 4, 8…).
+    Returns fn()'s return value on success; re-raises after max_attempts
+    or for any other OperationalError. Use this around lock-acquisition
+    points (init_db, BEGIN IMMEDIATE) where retrying without redoing other
+    work is safe."""
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except sqlite3.OperationalError as e:
+            if "database is locked" not in str(e).lower() or attempt + 1 == max_attempts:
+                raise
+            delay = base_delay * (2 ** attempt)
+            logger.warning(
+                "DB locked during %s (attempt %d/%d); sleeping %.1fs before retry",
+                label, attempt + 1, max_attempts, delay,
+            )
+            time.sleep(delay)
 
 
 def init_db():
@@ -838,7 +863,9 @@ def _check_timeout(run_start: float, phase: str):
 
 
 def main():
-    init_db()
+    # init_db runs migrations under an exclusive lock; retry on transient
+    # contention with the always-running admin dashboard.
+    _retry_on_db_locked(init_db, label="init_db")
     conn = db()
     try:
         load_content_filters(conn)
@@ -955,7 +982,15 @@ def main():
     seen_article_ids = set()
 
     try:
-        conn.execute("BEGIN")
+        # BEGIN IMMEDIATE acquires the writer lock at the start of the
+        # transaction (deferred BEGIN delays until first write, which can
+        # surprise us partway through with "database is locked"). If a
+        # competing writer holds the lock right now, retry with backoff
+        # before doing any work.
+        _retry_on_db_locked(
+            lambda: conn.execute("BEGIN IMMEDIATE"),
+            label="BEGIN IMMEDIATE writeback",
+        )
         cur = conn.cursor()
 
         for article in articles_data:
