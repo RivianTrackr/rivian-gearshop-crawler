@@ -10,6 +10,12 @@ def infer_availability_from_html(handle, variant_id, site_root, headers, log=lam
     """
     Fallback: fetch the product page with the specific variant selected and
     read availability from JSON-LD. Returns True/False/None.
+
+    When `crawler._browser_page` is set (set by main() during a live run),
+    routes the fetch through the open Playwright tab so it goes out over
+    Chrome's TLS stack instead of Python's libssl3. This is required after
+    the 2026-05-21 OpenSSL upgrade made the requests-based fingerprint
+    detectable by Cloudflare on gearshop.rivian.com.
     """
     global _avail_html_checks
     key = (handle, variant_id)
@@ -20,9 +26,17 @@ def infer_availability_from_html(handle, variant_id, site_root, headers, log=lam
     try:
         url = f"{site_root}/products/{handle}?variant={variant_id}"
         log(f"HTML availability check #{_avail_html_checks}: {url}")
-        r = requests.get(url, headers=headers, timeout=timeout)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
+        import crawler
+        if crawler._browser_page is not None:
+            status, body = crawler.fetch_via_browser(crawler._browser_page, url, timeout=timeout * 1000)
+            if status >= 400:
+                raise requests.HTTPError(f"{status} from {url}")
+            html_text = body
+        else:
+            r = requests.get(url, headers=headers, timeout=timeout)
+            r.raise_for_status()
+            html_text = r.text
+        soup = BeautifulSoup(html_text, "html.parser")
 
         for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
             try:
