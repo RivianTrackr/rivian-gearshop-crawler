@@ -132,8 +132,20 @@ AVAIL_HTML_MAX     = int(os.getenv("AVAIL_HTML_MAX", "200"))       # 0 = unlimit
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))    # -1 = disabled
 SNAPSHOT_RETENTION = 30  # keep latest N snapshots per variant
 
+# Browser-shaped headers. Shopify (fronted by Cloudflare) increasingly
+# returns 403 to identified-bot User-Agents on /products/<handle>.json
+# endpoints, which silently degrades every-hour price/availability refreshes.
+# A real-browser UA plus Accept-Language + Referer is what makes these
+# requests indistinguishable from someone browsing the storefront.
 HEADERS = {
-    "User-Agent": "RivianGearshopCrawler/1.0 (+https://riviantrackr.com)"
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://gearshop.rivian.com/",
 }
 
 def now_utc_iso() -> str:
