@@ -440,11 +440,49 @@ def _requests_session_with_retries(retries=3, backoff_factor=0.5, status_forceli
 
 _retry_session = _requests_session_with_retries()
 
+# Set by main() to the live Playwright page after the browser is launched.
+# When non-None, the HTTP fetch helpers below route their requests through
+# `fetch_via_browser` so they go out over Chrome's TLS stack instead of
+# Python's libssl3 stack. Required after the 2026-05-21 OpenSSL upgrade
+# changed our JA3/JA4 fingerprint and Cloudflare started returning 403 to
+# bare `requests` calls.
+_browser_page = None
+
+
+def fetch_via_browser(page, url, timeout=30000):
+    """Run `fetch(url)` inside the open browser tab and return (status, body_text).
+
+    Uses Chrome's network stack (and TLS handshake), bypassing the TLS
+    fingerprint detection that blocks `requests`-based fetches against
+    Cloudflare-fronted endpoints. Same-origin from gearshop.rivian.com.
+    """
+    result = page.evaluate(
+        """async ({url, timeout}) => {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), timeout);
+            try {
+                const r = await fetch(url, {credentials: 'include', signal: ctrl.signal});
+                return { status: r.status, body: await r.text() };
+            } finally {
+                clearTimeout(tid);
+            }
+        }""",
+        {"url": url, "timeout": timeout},
+    )
+    return result["status"], result["body"]
+
+
 def fetch_product_json(handle):
     url = f"{SITE_ROOT}/products/{handle}.json"
-    r = _retry_session.get(url, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    data = r.json()
+    if _browser_page is not None:
+        status, body = fetch_via_browser(_browser_page, url)
+        if status >= 400:
+            raise requests.HTTPError(f"{status} Client Error from {url}")
+        data = json.loads(body)
+    else:
+        r = _retry_session.get(url, headers=HEADERS, timeout=30)
+        r.raise_for_status()
+        data = r.json()
     if "product" not in data:
         raise ValueError(f"Missing 'product' key in JSON response for {handle}")
     return data["product"]
@@ -727,12 +765,21 @@ def check_variant_api_available(variant_id, timeout=15):
     try:
         url = f"{SITE_ROOT}/variants/{variant_id}.json"
         log(f"Variant API check: {url}")
-        r = requests.get(url, headers=HEADERS, timeout=timeout)
-        log(f"    variant api status={r.status_code}")
-        if r.status_code == 404:
-            return None
-        r.raise_for_status()
-        data = r.json() or {}
+        if _browser_page is not None:
+            status, body = fetch_via_browser(_browser_page, url, timeout=timeout * 1000)
+            log(f"    variant api status={status}")
+            if status == 404:
+                return None
+            if status >= 400:
+                raise requests.HTTPError(f"{status} from {url}")
+            data = json.loads(body) or {}
+        else:
+            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            log(f"    variant api status={r.status_code}")
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            data = r.json() or {}
         v = data.get("variant") or {}
         if "available" in v:
             return bool(v["available"])
@@ -746,11 +793,19 @@ def check_product_js_variant_available(handle, variant_id, timeout=15):
     try:
         url = f"{SITE_ROOT}/products/{handle}.js"
         log(f"Product JS check: {url}")
-        r = requests.get(url, headers=HEADERS, timeout=timeout)
-        if r.status_code == 404:
-            return None
-        r.raise_for_status()
-        data = r.json() or {}
+        if _browser_page is not None:
+            status, body = fetch_via_browser(_browser_page, url, timeout=timeout * 1000)
+            if status == 404:
+                return None
+            if status >= 400:
+                raise requests.HTTPError(f"{status} from {url}")
+            data = json.loads(body) or {}
+        else:
+            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            data = r.json() or {}
         for v in data.get("variants", []):
             try:
                 if int(v.get("id")) == int(variant_id):
@@ -773,14 +828,18 @@ def confirm_product_removed(handle, timeout=15):
     """
     url = f"{SITE_ROOT}/products/{handle}.json"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=timeout)
-        if r.status_code == 404:
+        if _browser_page is not None:
+            status, _ = fetch_via_browser(_browser_page, url, timeout=timeout * 1000)
+        else:
+            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            status = r.status_code
+        if status == 404:
             log(f"Removal check: {handle} -> 404 (confirmed removed)")
             return True
-        if r.ok:
-            log(f"Removal check: {handle} -> 200 (exists; not removed)")
+        if 200 <= status < 400:
+            log(f"Removal check: {handle} -> {status} (exists; not removed)")
             return False
-        log(f"Removal check: {handle} -> {r.status_code} (indeterminate)")
+        log(f"Removal check: {handle} -> {status} (indeterminate)")
         return None
     except Exception as e:
         log(f"Removal check error for {handle}: {e}")
@@ -799,46 +858,10 @@ def _error_alert_ctx():
     )
 
 
-def main():
-    init_db()
-    reset_avail_state()
-    crawled_at = now_utc_iso()
-    run_start = time.time()
-
-    # --- Collect product links with lazy-load + one retry if suspiciously low
-    with sync_playwright() as p:
-        try:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-dev-shm-usage",
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                ],
-                timeout=60000,  # 60s launch timeout
-            )
-        except Exception as e:
-            logger.error("Failed to launch browser: %s", e)
-            send_error_alert(
-                "Browser Launch Failed",
-                "Playwright/Chromium failed to start. The crawl was aborted.",
-                details=str(e),
-                **_error_alert_ctx(),
-            )
-            _record_crawl_run(crawled_at, run_start, status="error", error_message=str(e))
-            return
-
-        context = browser.new_context(user_agent=HEADERS.get("User-Agent"))
-        page = context.new_page()
-        links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
-
-        if len(links) < 50:
-            log("Few links collected on first attempt; retrying scroll once...")
-            page = context.new_page()
-            links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
-
-        browser.close()
-
+def _process_run(crawled_at, run_start, links):
+    """Post-discovery body of main(): walk products, write DB, send notifications.
+    Runs with the Playwright browser kept alive so HTTP helpers can route
+    through Chrome's TLS stack via `_browser_page`."""
     # Normalize to handles → canonical URLs
     handle_to_url = {}
     for link in links:
@@ -1236,6 +1259,53 @@ def main():
             )
 
     conn.close()
+
+
+def main():
+    init_db()
+    reset_avail_state()
+    crawled_at = now_utc_iso()
+    run_start = time.time()
+
+    # --- Collect product links with lazy-load + one retry if suspiciously low
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                ],
+                timeout=60000,  # 60s launch timeout
+            )
+        except Exception as e:
+            logger.error("Failed to launch browser: %s", e)
+            send_error_alert(
+                "Browser Launch Failed",
+                "Playwright/Chromium failed to start. The crawl was aborted.",
+                details=str(e),
+                **_error_alert_ctx(),
+            )
+            _record_crawl_run(crawled_at, run_start, status="error", error_message=str(e))
+            return
+
+        context = browser.new_context(user_agent=HEADERS.get("User-Agent"))
+        page = context.new_page()
+        links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
+
+        if len(links) < 50:
+            log("Few links collected on first attempt; retrying scroll once...")
+            page = context.new_page()
+            links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
+
+        global _browser_page
+        _browser_page = page
+        try:
+            _process_run(crawled_at, run_start, links)
+        finally:
+            _browser_page = None
+            browser.close()
 
 
 def _record_crawl_run(crawled_at, run_start, status="success", product_count=None,
