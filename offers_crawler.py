@@ -262,6 +262,56 @@ def compute_content_hash(text: str) -> str:
     ).hexdigest()
 
 
+OFFERS_BODY_DEBOUNCE_RUNS = 3
+
+
+def recent_body_hashes_for_offer(conn, offer_id, limit=2 * OFFERS_BODY_DEBOUNCE_RUNS - 1):
+    """Return the last `limit` body_hash values for an offer, newest first.
+
+    Pulls from offers_crawl_markers, which records one row per run per offer.
+    Older rows (pre-migration v2) have body_hash=NULL and propagate as None,
+    causing the debounce to return None (no emit) until enough new history
+    accumulates.
+    """
+    rows = conn.execute(
+        "SELECT body_hash FROM offers_crawl_markers WHERE offer_id = ? "
+        "ORDER BY crawled_at DESC LIMIT ?",
+        (offer_id, limit),
+    ).fetchall()
+    return [r["body_hash"] for r in rows]
+
+
+def body_change_confirmed(current_hash, recent_hashes,
+                          debounce_runs=OFFERS_BODY_DEBOUNCE_RUNS):
+    """Return the prior stable hash when a body change is confirmed, else None.
+
+    Mirrors crawler.availability_change_to_report: emit only when the new
+    hash has held for `debounce_runs` runs (counting current) AND the prior
+    hash also held for `debounce_runs` runs AND the two differ. Absorbs
+    blips shorter than `debounce_runs` on either side of a stable value.
+
+    With debounce_runs=3 we need 5 prior + current showing pattern
+    V',V',V',V,V,V where V != V'. Real changes are reported
+    (debounce_runs - 1) hours after the transition.
+    """
+    needed = 2 * debounce_runs - 1
+    if len(recent_hashes) < needed:
+        return None
+    if any(h is None for h in recent_hashes[:needed]):
+        return None
+    new_window = [current_hash] + list(recent_hashes[: debounce_runs - 1])
+    old_window = list(recent_hashes[debounce_runs - 1 : needed])
+    new_val = new_window[0]
+    old_val = old_window[0]
+    if (
+        all(h == new_val for h in new_window)
+        and all(h == old_val for h in old_window)
+        and new_val != old_val
+    ):
+        return old_val
+    return None
+
+
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -881,8 +931,20 @@ def main():
                 seen_ids.add(oid)
 
                 title_changed = existing["title"] != offer["title"]
-                body_changed = existing["body_hash"] != offer["body_hash"]
+                body_hash_differs = existing["body_hash"] != offer["body_hash"]
                 cta_changed = (existing["cta_url"] or "") != (offer["cta_url"] or "")
+
+                # Body changes are debounced: require the new hash to hold for
+                # OFFERS_BODY_DEBOUNCE_RUNS runs and the prior hash to have
+                # held the same. Rivian's offers page intermittently omits
+                # expiration lines between runs, which would otherwise emit
+                # flapping notifications every hour.
+                body_emit = False
+                if body_hash_differs and not is_initial:
+                    recent = recent_body_hashes_for_offer(conn, oid)
+                    confirmed_old = body_change_confirmed(offer["body_hash"], recent)
+                    if confirmed_old is not None:
+                        body_emit = True
 
                 if title_changed and not is_initial:
                     changes["title_changed"].append({
@@ -894,7 +956,7 @@ def main():
                         "change_type": "title changed",
                     })
 
-                if body_changed and not is_initial:
+                if body_emit:
                     prev_snap = conn.execute(
                         "SELECT body_text FROM offer_snapshots WHERE offer_id = ? ORDER BY id DESC LIMIT 1",
                         (oid,),
@@ -922,14 +984,20 @@ def main():
                         "change_type": "CTA changed",
                     })
 
-                if title_changed or body_changed or cta_changed:
+                if title_changed or body_emit or cta_changed:
+                    # When body change is suppressed by debounce, keep the
+                    # stored body_text/body_hash/expiration at their last
+                    # confirmed values so the debounce window doesn't collapse.
+                    new_body_text = offer["body_text"] if body_emit else existing["body_text"]
+                    new_body_hash = offer["body_hash"] if body_emit else existing["body_hash"]
+                    new_expiration = offer["expiration"] if body_emit else existing["expiration"]
                     cur.execute(
                         """UPDATE offers
                            SET title=?, body_text=?, body_hash=?, cta_url=?, expiration=?,
                                last_seen_at=?, updated_at=?, removed=0
                            WHERE id=?""",
-                        (offer["title"], offer["body_text"], offer["body_hash"],
-                         offer["cta_url"], offer["expiration"],
+                        (offer["title"], new_body_text, new_body_hash,
+                         offer["cta_url"], new_expiration,
                          crawled_at, crawled_at, oid),
                     )
                 else:
@@ -938,13 +1006,16 @@ def main():
                         (crawled_at, oid),
                     )
 
-                if title_changed or body_changed or cta_changed or is_initial:
+                if title_changed or body_emit or cta_changed or is_initial:
+                    snap_body_text = offer["body_text"] if (body_emit or is_initial) else existing["body_text"]
+                    snap_body_hash = offer["body_hash"] if (body_emit or is_initial) else existing["body_hash"]
+                    snap_expiration = offer["expiration"] if (body_emit or is_initial) else existing["expiration"]
                     cur.execute(
                         """INSERT INTO offer_snapshots
                            (offer_id, crawled_at, title, body_text, body_hash, url, cta_url, expiration)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (oid, crawled_at, offer["title"], offer["body_text"],
-                         offer["body_hash"], offer["url"], offer["cta_url"], offer["expiration"]),
+                        (oid, crawled_at, offer["title"], snap_body_text,
+                         snap_body_hash, offer["url"], offer["cta_url"], snap_expiration),
                     )
 
             else:
@@ -976,8 +1047,8 @@ def main():
                 })
 
             cur.execute(
-                "INSERT OR IGNORE INTO offers_crawl_markers (crawled_at, offer_id) VALUES (?,?)",
-                (crawled_at, oid),
+                "INSERT OR IGNORE INTO offers_crawl_markers (crawled_at, offer_id, body_hash) VALUES (?,?,?)",
+                (crawled_at, oid, offer["body_hash"]),
             )
 
         if seen_ids:

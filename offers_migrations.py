@@ -102,6 +102,13 @@ MIGRATIONS = [
         );
         """,
     ),
+    (
+        2,
+        "Track per-run body_hash on offers_crawl_markers for body-change debounce",
+        """
+        ALTER TABLE offers_crawl_markers ADD COLUMN body_hash TEXT;
+        """,
+    ),
 ]
 
 
