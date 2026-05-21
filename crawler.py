@@ -452,24 +452,22 @@ _browser_page = None
 def fetch_via_browser(page, url, timeout=30000):
     """Run `fetch(url)` inside the open browser tab and return (status, body_text).
 
-    Uses Chrome's network stack (and TLS handshake), bypassing the TLS
-    fingerprint detection that blocks `requests`-based fetches against
-    Cloudflare-fronted endpoints. Same-origin from gearshop.rivian.com.
+    Uses `page.goto()` (a real navigation) rather than `page.evaluate(fetch(...))`
+    because Cloudflare's rule on gearshop.rivian.com/products/*.json blocks
+    XHR-shaped requests (Sec-Fetch-Mode=cors / Dest=empty) from datacenter
+    IPs even when the TLS fingerprint is real Chrome. A navigation sends
+    Sec-Fetch-Mode=navigate / Dest=document — the same metadata a real
+    visitor opening the URL would send — which Cloudflare lets through.
+
+    The page tab is reused across calls; each navigation completes and we
+    pull the body straight off the Response. Cookies accumulated during
+    the initial collection-page visit (incl. Cloudflare's cf_clearance)
+    ride along on every subsequent goto.
     """
-    result = page.evaluate(
-        """async ({url, timeout}) => {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), timeout);
-            try {
-                const r = await fetch(url, {credentials: 'include', signal: ctrl.signal});
-                return { status: r.status, body: await r.text() };
-            } finally {
-                clearTimeout(tid);
-            }
-        }""",
-        {"url": url, "timeout": timeout},
-    )
-    return result["status"], result["body"]
+    response = page.goto(url, wait_until="commit", timeout=timeout)
+    if response is None:
+        raise requests.HTTPError(f"No response navigating to {url}")
+    return response.status, response.text()
 
 
 def fetch_product_json(handle):
@@ -988,7 +986,11 @@ def _process_run(crawled_at, run_start, links):
                             available = 0
                         else:
                             if (AVAIL_HTML_MAX == 0 or get_avail_html_checks() < AVAIL_HTML_MAX):
-                                inferred = infer_availability_from_html(handle, vid, SITE_ROOT, HEADERS, log)
+                                inferred = infer_availability_from_html(
+                                    handle, vid, SITE_ROOT, HEADERS, log,
+                                    page=_browser_page,
+                                    fetch_via_browser=fetch_via_browser,
+                                )
                                 log(f"    avail: html={inferred!r}")
                                 if inferred is True:
                                     available = 1
