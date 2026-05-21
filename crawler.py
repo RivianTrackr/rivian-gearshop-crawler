@@ -387,6 +387,71 @@ def should_send_heartbeat(conn):
 
 # ---------------------- Scrape Helpers ----------------------
 
+def discover_product_handles_via_json(page, log=log):
+    """Walk Shopify's /products.json paginated endpoint to enumerate the live
+    catalog. Returns a sorted list of unique product handles.
+
+    Replaces the previous scroll-of-/collections/all approach, which only
+    rendered ~100 of the ~200 live products before lazy-load stopped firing.
+    /products.json is Shopify's storefront-public listing endpoint — it
+    returns every visible product, paginates at limit=250, and stops cold
+    when the catalog runs out.
+
+    Uses `fetch_via_browser` (page.goto) so the request inherits the same
+    real-Chrome navigation that the per-product fetches use, bypassing the
+    same Cloudflare bot block. Tolerates transient 403s with a short
+    backoff — if even retries can't get page 1, the run aborts via the
+    anomaly guard.
+    """
+    handles = []
+    seen = set()
+    log(f"Discovery via {SITE_ROOT}/products.json (limit=250 per page)")
+    for page_num in range(1, 50):  # generous cap — current catalog is ~1 page
+        url = f"{SITE_ROOT}/products.json?limit=250&page={page_num}"
+        body = None
+        for attempt in range(5):
+            try:
+                status, body = fetch_via_browser(page, url, timeout=60000)
+            except Exception as e:
+                log(f"  page {page_num} attempt {attempt + 1}: error {e}")
+                time.sleep(2 + attempt)
+                continue
+            if status == 200:
+                break
+            log(f"  page {page_num} attempt {attempt + 1}: status={status}")
+            time.sleep(2 + attempt)
+        else:
+            log(f"  page {page_num} failed after retries; stopping discovery")
+            break
+
+        try:
+            data = json.loads(body) if body else {}
+        except Exception as e:
+            log(f"  page {page_num}: JSON parse error {e}")
+            break
+
+        products = data.get("products", []) or []
+        if not products:
+            log(f"  page {page_num}: empty, done")
+            break
+
+        added = 0
+        for p in products:
+            h = (p.get("handle") or "").strip()
+            if h and h not in seen:
+                seen.add(h)
+                handles.append(h)
+                added += 1
+        log(f"  page {page_num}: +{added} (running total {len(handles)})")
+
+        # Shopify returns fewer than `limit` on the last page — short-circuit.
+        if len(products) < 250:
+            break
+
+    log(f"Discovered {len(handles)} live product handles.")
+    return sorted(handles)
+
+
 def infinite_scroll_collect_product_links(page, collection_url):
     log(f"Opening collection: {collection_url}")
     page.goto(collection_url, wait_until="networkidle")
@@ -1294,12 +1359,29 @@ def main():
 
         context = browser.new_context(user_agent=HEADERS.get("User-Agent"))
         page = context.new_page()
-        links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
 
+        # Warmup: navigate to the storefront root so any Cloudflare JS
+        # challenge runs and we pick up cf_clearance cookies before the
+        # JSON endpoints. networkidle gives the challenge time to settle.
+        log(f"Warmup navigation: {SITE_ROOT}")
+        try:
+            page.goto(SITE_ROOT, wait_until="networkidle", timeout=60000)
+        except Exception as e:
+            log(f"Warmup navigation warning (continuing): {e}")
+
+        # Primary discovery: Shopify's /products.json paginated endpoint.
+        # Replaces the previous /collections/all scroll, which only renders
+        # ~half the catalog before lazy-load stops firing.
+        handles = discover_product_handles_via_json(page)
+        links = [f"{SITE_ROOT}/products/{h}" for h in handles]
+
+        # Fallback: if /products.json failed (returned <50), still try the
+        # scroll-based discovery and merge results. Either path that finds
+        # the catalog wins.
         if len(links) < 50:
-            log("Few links collected on first attempt; retrying scroll once...")
-            page = context.new_page()
-            links = infinite_scroll_collect_product_links(page, COLLECTION_URL)
+            log("Few products via products.json; falling back to /collections/all scroll")
+            fallback = infinite_scroll_collect_product_links(page, COLLECTION_URL)
+            links = sorted(set(links) | set(fallback))
 
         global _browser_page
         _browser_page = page
