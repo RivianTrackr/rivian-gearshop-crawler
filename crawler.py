@@ -448,6 +448,17 @@ _retry_session = _requests_session_with_retries()
 # bare `requests` calls.
 _browser_page = None
 
+# Per-run counters tracking which tier of the availability fallback chain
+# decided each variant's availability. Logged in the run summary so we can
+# see at a glance which signal is doing the work and whether the .js-first
+# inversion (2026-05-23) is holding up.
+_avail_tier_counts = {"js": 0, "json": 0, "api": 0, "html": 0, "none": 0}
+
+
+def _reset_avail_tier_counts():
+    global _avail_tier_counts
+    _avail_tier_counts = {"js": 0, "json": 0, "api": 0, "html": 0, "none": 0}
+
 
 def fetch_via_browser(page, url, timeout=30000):
     """Run `fetch(url)` inside the open browser tab and return (status, body_text).
@@ -786,11 +797,24 @@ def check_variant_api_available(variant_id, timeout=15):
         log(f"Variant API error for {variant_id}: {e}")
         return None
 
-def check_product_js_variant_available(handle, variant_id, timeout=15):
-    """Try Shopify's /products/<handle>.js (often includes variant.available)."""
+def fetch_product_js_avail_map(handle, timeout=15):
+    """Fetch /products/<handle>.js once and return {variant_id: bool} for
+    every variant whose `available` field is present.
+
+    Returns an empty dict if the fetch succeeds but no variants expose
+    `available`, and None on any failure (so callers can distinguish
+    "explicitly missing" from "endpoint failed").
+
+    The .js endpoint is the storefront's own data source and reliably
+    includes `available` per variant — unlike /products/<handle>.json
+    on this Rivian store, where `available` is suppressed. Calling once
+    per product gives a coherent snapshot across all variants (vs. the
+    variant API, which is called per-variant and can sample different
+    cache generations across sequential calls).
+    """
     try:
         url = f"{SITE_ROOT}/products/{handle}.js"
-        log(f"Product JS check: {url}")
+        log(f"Product JS map fetch: {url}")
         if _browser_page is not None:
             status, body = fetch_via_browser(_browser_page, url, timeout=timeout * 1000)
             if status == 404:
@@ -804,17 +828,17 @@ def check_product_js_variant_available(handle, variant_id, timeout=15):
                 return None
             r.raise_for_status()
             data = r.json() or {}
+        avail_map = {}
         for v in data.get("variants", []):
             try:
-                if int(v.get("id")) == int(variant_id):
-                    if "available" in v:
-                        return bool(v["available"])
-                    break
-            except Exception:
+                vid = int(v.get("id"))
+            except (TypeError, ValueError):
                 continue
-        return None
+            if "available" in v:
+                avail_map[vid] = bool(v["available"])
+        return avail_map
     except Exception as e:
-        log(f"Product JS error for {handle}/{variant_id}: {e}")
+        log(f"Product JS map error for {handle}: {e}")
         return None
 
 # ---------------------- Removal Confirmation Helper ----------------------
@@ -945,6 +969,19 @@ def _process_run(crawled_at, run_start, links):
             # Mark presence this crawl
             cur.execute("INSERT OR IGNORE INTO crawl_markers (crawled_at, product_id) VALUES (?,?)", (crawled_at, product_id))
 
+            # Fetch the .js availability map ONCE per product. This is the
+            # primary availability signal — /products/<handle>.js reliably
+            # includes `available` per variant (unlike /products/<handle>.json
+            # on this Rivian store), and returns a coherent snapshot across
+            # all variants in a single call. The per-variant API previously
+            # used as primary was sampling different cache generations across
+            # sequential per-variant calls, which produced the multi-hour
+            # flap patterns observed 2026-05-22 (sibling sizes of the same
+            # color flipping together in one run).
+            js_avail_map = fetch_product_js_avail_map(handle)
+            if js_avail_map is None:
+                log(f"  .js map unavailable for {handle}; falling back per-variant")
+
             # Variants
             for v in pj.get("variants", []):
                 log(f"  Variant {v.get('id')} | title={v.get('title')} | sku={v.get('sku')}")
@@ -965,39 +1002,75 @@ def _process_run(crawled_at, run_start, links):
                 price = cents(v.get("price"))
                 compare_at = cents(v.get("compare_at_price"))
 
-                # Availability: product JSON → Variant API → Product JS → HTML (capped)
-                raw_avail = v.get("available")
-                available = 1 if raw_avail else 0
-                log(f"    avail: json={raw_avail!r} -> {available}")
+                # Availability fallback chain (revised 2026-05-23, inverted
+                # from prior JSON → API → JS → HTML order):
+                #   1. .js map        — primary; storefront-coherent per product
+                #   2. JSON .available — defensive; if Shopify ever exposes it
+                #   3. variant API    — fallback; per-variant, separate cache
+                #   4. HTML JSON-LD   — last resort; capped per run
+                available = None
+                decided_by = None
 
-                if not available:
+                # Tier 1: .js map (preferred)
+                if js_avail_map is not None:
+                    try:
+                        vid_int = int(vid)
+                    except (TypeError, ValueError):
+                        vid_int = None
+                    if vid_int is not None and vid_int in js_avail_map:
+                        js_val = js_avail_map[vid_int]
+                        available = 1 if js_val else 0
+                        decided_by = "js"
+                        log(f"    avail: js={js_val!r} -> {available}")
+
+                # Tier 2: product JSON .available (rare on this store)
+                if available is None:
+                    raw_avail = v.get("available")
+                    if raw_avail is True:
+                        available = 1
+                        decided_by = "json"
+                        log(f"    avail: json={raw_avail!r} -> 1")
+                    elif raw_avail is False:
+                        available = 0
+                        decided_by = "json"
+                        log(f"    avail: json={raw_avail!r} -> 0")
+
+                # Tier 3: variant API fallback
+                if available is None:
                     api_avail = check_variant_api_available(vid)
                     log(f"    avail: api={api_avail!r}")
                     if api_avail is True:
                         available = 1
+                        decided_by = "api"
                     elif api_avail is False:
                         available = 0
-                    else:
-                        js_avail = check_product_js_variant_available(handle, vid)
-                        log(f"    avail: js={js_avail!r}")
-                        if js_avail is True:
+                        decided_by = "api"
+
+                # Tier 4: HTML last resort (capped per run)
+                if available is None:
+                    if AVAIL_HTML_MAX == 0 or get_avail_html_checks() < AVAIL_HTML_MAX:
+                        inferred = infer_availability_from_html(
+                            handle, vid, SITE_ROOT, HEADERS, log,
+                            page=_browser_page,
+                            fetch_via_browser=fetch_via_browser,
+                        )
+                        log(f"    avail: html={inferred!r}")
+                        if inferred is True:
                             available = 1
-                        elif js_avail is False:
+                            decided_by = "html"
+                        elif inferred is False:
                             available = 0
-                        else:
-                            if (AVAIL_HTML_MAX == 0 or get_avail_html_checks() < AVAIL_HTML_MAX):
-                                inferred = infer_availability_from_html(
-                                    handle, vid, SITE_ROOT, HEADERS, log,
-                                    page=_browser_page,
-                                    fetch_via_browser=fetch_via_browser,
-                                )
-                                log(f"    avail: html={inferred!r}")
-                                if inferred is True:
-                                    available = 1
-                                elif inferred is False:
-                                    available = 0
-                            else:
-                                log(f"    avail: html=SKIPPED (cap {get_avail_html_checks()}/{AVAIL_HTML_MAX})")
+                            decided_by = "html"
+                    else:
+                        log(f"    avail: html=SKIPPED (cap {get_avail_html_checks()}/{AVAIL_HTML_MAX})")
+
+                # All tiers indeterminate — default to unavailable
+                if available is None:
+                    available = 0
+                    decided_by = "none"
+                    log(f"    avail: ALL TIERS INDETERMINATE -> defaulting to 0")
+
+                _avail_tier_counts[decided_by] = _avail_tier_counts.get(decided_by, 0) + 1
 
                 recent = recent_snapshots_for_variant(conn, vid, limit=2 * AVAILABILITY_DEBOUNCE_RUNS - 1)
                 prev = recent[0] if recent else None
@@ -1164,10 +1237,12 @@ def _process_run(crawled_at, run_start, links):
         raise
 
     # Summary log
+    tier_summary = " ".join(f"{k}={v}" for k, v in _avail_tier_counts.items() if v)
     log(
         f"Diffs: {len(diffs)} | New: {len(new_products_report_block)} | "
         f"Removed: {len(removed_products_report_block)} | "
-        f"HTML availability checks: {get_avail_html_checks()}"
+        f"HTML availability checks: {get_avail_html_checks()} | "
+        f"avail tiers: {tier_summary or 'none'}"
     )
 
     # Email / Heartbeat
@@ -1266,6 +1341,7 @@ def _process_run(crawled_at, run_start, links):
 def main():
     init_db()
     reset_avail_state()
+    _reset_avail_tier_counts()
     crawled_at = now_utc_iso()
     run_start = time.time()
 
