@@ -46,6 +46,7 @@ def log(msg: str):
 
 
 SUPPORT_URL = os.getenv("SUPPORT_URL", "https://rivian.com/support")
+SUPPORT_SITEMAP_URL = os.getenv("SUPPORT_SITEMAP_URL", "https://rivian.com/sitemap.xml")
 SUPPORT_DB_PATH = os.getenv("SUPPORT_DB_PATH", "/opt/rivian-gearshop-crawler/support.db")
 
 # Notification settings — loaded from admin DB if available, else fall back to env vars
@@ -142,7 +143,7 @@ _load_notification_settings()
 
 # Tuning
 ARTICLE_DELAY = float(os.getenv("SUPPORT_ARTICLE_DELAY", "1.0"))
-MAX_ARTICLES = int(os.getenv("SUPPORT_MAX_ARTICLES", "500"))
+MAX_ARTICLES = int(os.getenv("SUPPORT_MAX_ARTICLES", "1000"))
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))
 SNAPSHOT_RETENTION = 30
 
@@ -306,6 +307,34 @@ def category_from_referrer(referrer_url: str) -> str:
 
 # ---------------------- Playwright Discovery & Extraction ----------------------
 
+# Matches canonical English support article URLs only (excludes /en-CA/, /fr-CA/, etc.)
+_SITEMAP_ARTICLE_RE = re.compile(
+    r"<loc>(https://rivian\.com/support/article/[^<]+)</loc>"
+)
+
+
+def fetch_sitemap_article_urls() -> set[str]:
+    """Fetch rivian.com's sitemap and extract canonical support article URLs.
+
+    The site's /support and category pages only surface a subset of articles —
+    many live behind deeper sub-navigation that the one-hop category crawl
+    never reaches. The sitemap is the authoritative list.
+    """
+    try:
+        resp = requests.get(SUPPORT_SITEMAP_URL, headers=HEADERS, timeout=60)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.warning("Failed to fetch sitemap %s: %s", SUPPORT_SITEMAP_URL, e)
+        return set()
+
+    urls = set()
+    for m in _SITEMAP_ARTICLE_RE.finditer(resp.text):
+        url = m.group(1).split("?")[0].split("#")[0].rstrip("/")
+        urls.add(url)
+    log(f"Sitemap: found {len(urls)} support article URLs")
+    return urls
+
+
 def discover_article_urls(page) -> list[dict]:
     """
     Visit /support, discover category links, then visit each category
@@ -389,6 +418,16 @@ def discover_article_urls(page) -> list[dict]:
             _collect_articles_from_page(page, cat_name)
         except Exception as e:
             logger.warning("Failed to load category %s: %s", cat_url, e)
+
+    # Augment with sitemap — picks up articles not linked from any category page.
+    sitemap_added = 0
+    for url in fetch_sitemap_article_urls():
+        slug = slug_from_url(url)
+        if slug and slug not in articles:
+            articles[slug] = {"url": url, "slug": slug, "category": ""}
+            sitemap_added += 1
+    if sitemap_added:
+        log(f"Sitemap added {sitemap_added} article(s) not found via category pages")
 
     result = list(articles.values())[:MAX_ARTICLES]
     log(f"Discovered {len(result)} unique articles")
