@@ -142,7 +142,7 @@ def _load_notification_settings():
 _load_notification_settings()
 
 # Tuning
-ARTICLE_DELAY = float(os.getenv("SUPPORT_ARTICLE_DELAY", "1.0"))
+ARTICLE_DELAY = float(os.getenv("SUPPORT_ARTICLE_DELAY", "0.5"))
 MAX_ARTICLES = int(os.getenv("SUPPORT_MAX_ARTICLES", "1000"))
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))
 SNAPSHOT_RETENTION = 30
@@ -888,7 +888,7 @@ def _error_alert_ctx():
     )
 
 
-MAX_RUN_SECONDS = int(os.getenv("SUPPORT_MAX_RUN_SECONDS", "1500"))  # 25 min default
+MAX_RUN_SECONDS = int(os.getenv("SUPPORT_MAX_RUN_SECONDS", "1800"))  # 30 min default
 
 
 def _check_timeout(run_start: float, phase: str):
