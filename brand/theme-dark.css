@@ -11,23 +11,23 @@
   --accent-hover: #ffbe4a;
 
   /* --- Backgrounds --- */
-  --bg-primary: #121e2b;
-  --bg-card: #121e2b;
-  --bg-input: #374151;
-  --bg-deep: #0f1a26;
-  --bg-hover: #1a2a3a;
+  --bg-primary: #16191e;
+  --bg-card: #16191e;
+  --bg-input: #3a3e45;
+  --bg-deep: #121418;
+  --bg-hover: #1f2228;
 
   /* --- Text --- */
-  --text-primary: #e5e7eb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --text-heading: #f3f4f6;
-  --text-on-accent: #0f172a;
+  --text-primary: #ece9e4;
+  --text-secondary: #a6a39c;
+  --text-muted: #79766f;
+  --text-heading: #f6f4f0;
+  --text-on-accent: #15130e;
 
   /* --- Borders --- */
-  --border: #374151;
-  --border-hover: #4b5563;
-  --divider: #1e2d3d;
+  --border: #3a3e45;
+  --border-hover: #4e525a;
+  --divider: #24272d;
 
   /* --- Interactive tints (using color-mix) --- */
   --accent-tint-8: color-mix(in srgb, var(--accent) 8%, var(--bg-deep));
