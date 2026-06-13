@@ -4,19 +4,19 @@
    ============================================================ */
 
 :root {
-  --pico-background-color: #0f1a26;
-  --pico-card-background-color: #121e2b;
-  --pico-card-sectioning-background-color: #121e2b;
+  --pico-background-color: #121418;
+  --pico-card-background-color: #16191e;
+  --pico-card-sectioning-background-color: #16191e;
   --pico-primary: #fba919;
-  --pico-primary-hover: #e89a0e;
-  --pico-primary-inverse: #0f172a;
-  --pico-color: #e5e7eb;
-  --pico-muted-color: #9ca3af;
-  --pico-secondary: #9ca3af;
-  --pico-muted-border-color: #374151;
+  --pico-primary-hover: #ffbe4a;
+  --pico-primary-inverse: #15130e;
+  --pico-color: #ece9e4;
+  --pico-muted-color: #a6a39c;
+  --pico-secondary: #a6a39c;
+  --pico-muted-border-color: #3a3e45;
   --rtg-accent: #fba919;
   --rtg-error: #ef4444;
-  --rtg-text-secondary: #9ca3af;
+  --rtg-text-secondary: #a6a39c;
 }
 
 /* ---------- Typography ---------- */
@@ -54,32 +54,32 @@ code, pre, kbd {
 
 article.flash-success {
   border-left: 4px solid #4ade80;
-  background: color-mix(in srgb, #4ade80 12%, #121e2b);
+  background: color-mix(in srgb, #4ade80 12%, #16191e);
   color: #4ade80;
 }
 
 article.flash-error {
   border-left: 4px solid #ef4444;
-  background: color-mix(in srgb, #ef4444 12%, #121e2b);
+  background: color-mix(in srgb, #ef4444 12%, #16191e);
   color: #fca5a5;
 }
 
 article.flash-info {
   border-left: 4px solid #60a5fa;
-  background: color-mix(in srgb, #60a5fa 12%, #121e2b);
+  background: color-mix(in srgb, #60a5fa 12%, #16191e);
   color: #93bbfd;
 }
 
 article.flash-warning {
   border-left: 4px solid var(--rtg-accent);
-  background: color-mix(in srgb, #fba919 12%, #121e2b);
+  background: color-mix(in srgb, #fba919 12%, #16191e);
   color: #fcd278;
 }
 
 /* ---------- Badges ---------- */
 
 mark {
-  background-color: color-mix(in srgb, #4ade80 15%, #121e2b);
+  background-color: color-mix(in srgb, #4ade80 15%, #16191e);
   color: #4ade80;
   padding: 2px 8px;
   border-radius: 6px;
@@ -88,31 +88,31 @@ mark {
 }
 
 mark.error {
-  background-color: color-mix(in srgb, #ef4444 15%, #121e2b);
+  background-color: color-mix(in srgb, #ef4444 15%, #16191e);
   color: #fca5a5;
 }
 
 mark.success {
-  background-color: color-mix(in srgb, #4ade80 15%, #121e2b);
+  background-color: color-mix(in srgb, #4ade80 15%, #16191e);
   color: #4ade80;
 }
 
 mark.info {
-  background-color: color-mix(in srgb, #60a5fa 15%, #121e2b);
+  background-color: color-mix(in srgb, #60a5fa 15%, #16191e);
   color: #93bbfd;
 }
 
 mark.warning {
-  background-color: color-mix(in srgb, #fba919 15%, #121e2b);
+  background-color: color-mix(in srgb, #fba919 15%, #16191e);
   color: #fcd278;
 }
 
 /* ---------- Log Output ---------- */
 
 pre#log-output {
-  background: #0f1a26;
-  border: 1px solid #374151;
-  color: #e5e7eb;
+  background: #121418;
+  border: 1px solid #3a3e45;
+  color: #ece9e4;
   font-size: 13px;
   max-height: 600px;
   overflow-y: auto;
@@ -140,8 +140,8 @@ pre#log-output {
 /* ---------- Tables ---------- */
 
 table thead th {
-  background: #0f1a26;
-  color: #9ca3af;
+  background: #121418;
+  color: #a6a39c;
   font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
@@ -149,7 +149,7 @@ table thead th {
 }
 
 table tbody tr:hover {
-  background: color-mix(in srgb, #374151 30%, #121e2b);
+  background: color-mix(in srgb, #3a3e45 30%, #16191e);
 }
 
 /* ---------- Inline alert (used in settings/notifications/content-filters) ---------- */
@@ -157,7 +157,7 @@ table tbody tr:hover {
 .alert-success {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: color-mix(in srgb, #4ade80 12%, #121e2b);
+  background: color-mix(in srgb, #4ade80 12%, #16191e);
   border-left: 4px solid #4ade80;
   color: #4ade80;
   border-radius: 0 8px 8px 0;
@@ -166,7 +166,7 @@ table tbody tr:hover {
 .alert-error {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: color-mix(in srgb, #ef4444 12%, #121e2b);
+  background: color-mix(in srgb, #ef4444 12%, #16191e);
   border-left: 4px solid #ef4444;
   color: #fca5a5;
   border-radius: 0 8px 8px 0;
@@ -175,7 +175,7 @@ table tbody tr:hover {
 .alert-info {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: color-mix(in srgb, #60a5fa 12%, #121e2b);
+  background: color-mix(in srgb, #60a5fa 12%, #16191e);
   border-left: 4px solid #60a5fa;
   color: #93bbfd;
   border-radius: 0 8px 8px 0;
@@ -184,7 +184,7 @@ table tbody tr:hover {
 .alert-warning {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  background: color-mix(in srgb, #fba919 12%, #121e2b);
+  background: color-mix(in srgb, #fba919 12%, #16191e);
   border-left: 4px solid var(--rtg-accent);
   color: #fcd278;
   border-radius: 0 8px 8px 0;

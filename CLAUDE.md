@@ -7,22 +7,24 @@ no component library. Icons via Font Awesome 6. Modern CSS features assumed
 
 ### Color Primitives
 
-**Dark theme (consumer-facing)**
+**Dark theme (consumer-facing)** — "ink & brass": near-neutral charcoal surfaces
+with a faint cool cast, warm-neutral text like ink on paper, gold as the only
+saturated accent. Display titles 24px+ are weight 700 with negative tracking.
 
 | Role            | Value     | Notes                          |
 |-----------------|-----------|--------------------------------|
-| Background      | `#121e2b` | Primary surfaces, cards        |
-| Background deep | `#0f1a26` | Deepest layer, inset regions   |
-| Input surface   | `#374151` | Form controls, select fields   |
-| Text primary    | `#e5e7eb` | Body copy, headings            |
-| Border          | `#374151` | Dividers, card edges           |
+| Background      | `#16191e` | Primary surfaces, cards        |
+| Background deep | `#121418` | Deepest layer, inset regions   |
+| Input surface   | `#3a3e45` | Form controls, select fields   |
+| Text primary    | `#ece9e4` | Body copy, headings            |
+| Border          | `#3a3e45` | Dividers, card edges           |
 | Accent          | `#fba919` | CTAs, links, focus rings, stars|
 | Secondary CTA   | `#7c3aed` | Alternate action (hover: `#6d28d9`) |
 | Destructive     | `#ef4444` | Delete, favorite active, error |
 | Positive        | `#4ade80` | User-contributed highlights    |
-| Star empty      | `#2d3a49` | Unfilled rating slots          |
-| Placeholder     | `#9ca3af` | Input placeholder text         |
-| Overlay dark    | `#0f172a` | Text-on-accent, dark contrast  |
+| Star empty      | `#2c2f34` | Unfilled rating slots          |
+| Placeholder     | `#a6a39c` | Input placeholder text         |
+| Overlay dark    | `#15130e` | Text-on-accent, dark contrast  |
 
 **Light theme (admin/internal)**
 

@@ -451,7 +451,7 @@ def article_detail(request: Request, script_id: int, article_id: int):
                     elif line.startswith("-"):
                         parts.append(f'<div style="background:#f8d7da;padding:2px 6px;">- {html_escape(line[1:])}</div>')
                     elif line.startswith("@@"):
-                        parts.append(f'<div style="color:#6b7280;padding:2px 6px;">{html_escape(line)}</div>')
+                        parts.append(f'<div style="color:#79766f;padding:2px 6px;">{html_escape(line)}</div>')
                 diff_html = "".join(parts)
             title_changed = snap["title"] != older["title"]
             url_changed = snap["url"] != older["url"]
@@ -661,7 +661,7 @@ def offer_detail(request: Request, script_id: int, offer_id: int):
                     elif line.startswith("-"):
                         parts.append(f'<div style="background:#f8d7da;padding:2px 6px;">- {html_escape(line[1:])}</div>')
                     elif line.startswith("@@"):
-                        parts.append(f'<div style="color:#6b7280;padding:2px 6px;">{html_escape(line)}</div>')
+                        parts.append(f'<div style="color:#79766f;padding:2px 6px;">{html_escape(line)}</div>')
                 diff_html = "".join(parts)
             title_changed = snap["title"] != older["title"]
             url_changed = snap["url"] != older["url"]
