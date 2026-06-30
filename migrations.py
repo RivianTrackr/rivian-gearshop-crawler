@@ -175,6 +175,20 @@ MIGRATIONS = [
         );
         """,
     ),
+    (
+        5,
+        "Add social_posts table to de-duplicate social media posts per product/change/platform",
+        """
+        CREATE TABLE IF NOT EXISTS social_posts (
+            product_id INTEGER NOT NULL,
+            change_type TEXT NOT NULL,   -- 'new' or 'removed'
+            platform TEXT NOT NULL,      -- 'bluesky', 'x', 'threads'
+            posted_at TEXT NOT NULL,
+            post_ref TEXT,               -- platform post id / URI for audit
+            PRIMARY KEY (product_id, change_type, platform)
+        );
+        """,
+    ),
 ]
 
 

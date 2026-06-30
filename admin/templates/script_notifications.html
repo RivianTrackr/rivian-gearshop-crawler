@@ -186,4 +186,135 @@
     <button type="submit" class="outline secondary">Send Test Notification</button>
   </form>
 </article>
+
+<article>
+  <header><strong>Social Media Auto-Posting</strong></header>
+  <p>Automatically post a text + link update to X/Twitter, Bluesky, and/or Threads
+     whenever a product is added or removed. Variant price changes are not posted.</p>
+
+  <form method="post" action="/scripts/{{ script.id }}/notifications/social">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+
+    <fieldset>
+      <legend><strong>X / Twitter</strong>
+        <small>(<a href="https://developer.x.com" target="_blank" rel="noopener">developer.x.com</a> → app with Read+Write)</small>
+      </legend>
+      <label>
+        <input type="checkbox" name="x_enabled" role="switch"
+               {% if social.config.get('x', {}).get('enabled') %}checked{% endif %}>
+        Enable X posting
+      </label>
+      <div class="grid">
+        <div>
+          <label for="x_api_key">API Key</label>
+          <input type="password" id="x_api_key" name="x_api_key"
+                 value="{{ social.config.get('x', {}).get('api_key', '') }}">
+        </div>
+        <div>
+          <label for="x_api_secret">API Secret</label>
+          <input type="password" id="x_api_secret" name="x_api_secret"
+                 value="{{ social.config.get('x', {}).get('api_secret', '') }}">
+        </div>
+      </div>
+      <div class="grid">
+        <div>
+          <label for="x_access_token">Access Token</label>
+          <input type="password" id="x_access_token" name="x_access_token"
+                 value="{{ social.config.get('x', {}).get('access_token', '') }}">
+        </div>
+        <div>
+          <label for="x_access_secret">Access Token Secret</label>
+          <input type="password" id="x_access_secret" name="x_access_secret"
+                 value="{{ social.config.get('x', {}).get('access_secret', '') }}">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>Bluesky</strong>
+        <small>(create an <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener">app password</a>)</small>
+      </legend>
+      <label>
+        <input type="checkbox" name="bluesky_enabled" role="switch"
+               {% if social.config.get('bluesky', {}).get('enabled') %}checked{% endif %}>
+        Enable Bluesky posting
+      </label>
+      <div class="grid">
+        <div>
+          <label for="bluesky_handle">Handle</label>
+          <input type="text" id="bluesky_handle" name="bluesky_handle"
+                 value="{{ social.config.get('bluesky', {}).get('handle', '') }}"
+                 placeholder="riviantrackr.bsky.social">
+        </div>
+        <div>
+          <label for="bluesky_app_password">App Password</label>
+          <input type="password" id="bluesky_app_password" name="bluesky_app_password"
+                 value="{{ social.config.get('bluesky', {}).get('app_password', '') }}"
+                 placeholder="xxxx-xxxx-xxxx-xxxx">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>Threads</strong>
+        <small>(<a href="https://developers.facebook.com/docs/threads" target="_blank" rel="noopener">Threads API</a> — pro account + long-lived token)</small>
+      </legend>
+      <label>
+        <input type="checkbox" name="threads_enabled" role="switch"
+               {% if social.config.get('threads', {}).get('enabled') %}checked{% endif %}>
+        Enable Threads posting
+      </label>
+      <div class="grid">
+        <div>
+          <label for="threads_user_id">Threads User ID</label>
+          <input type="text" id="threads_user_id" name="threads_user_id"
+                 value="{{ social.config.get('threads', {}).get('user_id', '') }}">
+        </div>
+        <div>
+          <label for="threads_access_token">Access Token</label>
+          <input type="password" id="threads_access_token" name="threads_access_token"
+                 value="{{ social.config.get('threads', {}).get('access_token', '') }}">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><strong>Posting Options</strong></legend>
+      <label>
+        <input type="checkbox" name="post_new"
+               {% if social.config.get('post_new', true) %}checked{% endif %}>
+        Post when products are added
+      </label>
+      <label>
+        <input type="checkbox" name="post_removed"
+               {% if social.config.get('post_removed', true) %}checked{% endif %}>
+        Post when products are removed
+      </label>
+      <label for="max_posts_per_run">Max individual posts per crawl
+        <small>(overflow becomes one summary post)</small></label>
+      <input type="number" id="max_posts_per_run" name="max_posts_per_run" min="0" step="1"
+             value="{{ social.config.get('max_posts_per_run', 5) }}"
+             style="max-width: 8rem;">
+    </fieldset>
+
+    <div role="group">
+      <button type="submit">Save Social Settings</button>
+    </div>
+  </form>
+
+  <div class="grid" style="margin-top: 0.5rem;">
+    <form method="post" action="/scripts/{{ script.id }}/notifications/test-social/x">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit" class="outline secondary">Test X</button>
+    </form>
+    <form method="post" action="/scripts/{{ script.id }}/notifications/test-social/bluesky">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit" class="outline secondary">Test Bluesky</button>
+    </form>
+    <form method="post" action="/scripts/{{ script.id }}/notifications/test-social/threads">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button type="submit" class="outline secondary">Test Threads</button>
+    </form>
+  </div>
+</article>
 {% endblock %}

@@ -87,6 +87,7 @@ def notifications_page(request: Request, script_id: int):
 
     email_notif = _get_notification(script_id, "email")
     discord_notif = _get_notification(script_id, "discord")
+    social_notif = _get_notification(script_id, "social")
 
     return templates.TemplateResponse("script_notifications.html", {
         "request": request,
@@ -95,6 +96,7 @@ def notifications_page(request: Request, script_id: int):
         "is_offers": "offers" in script["name"],
         "email": email_notif or {"enabled": False, "config": {}},
         "discord": discord_notif or {"enabled": False, "config": {}},
+        "social": social_notif or {"enabled": False, "config": {}},
         "csrf_token": request.state.csrf_token,
         "flash_message": None,
     })
@@ -295,10 +297,92 @@ def test_discord(request: Request, script_id: int, csrf: str = Depends(verify_cs
         return _notif_response(request, script_id, flash=f"Discord send error: {e}", flash_type="error")
 
 
+@router.post("/scripts/{script_id}/notifications/social", response_class=HTMLResponse)
+async def update_social_settings(request: Request, script_id: int,
+                                 csrf: str = Depends(verify_csrf)):
+    script = _get_script(script_id)
+    if not script:
+        return RedirectResponse("/", status_code=303)
+
+    form = await request.form()
+
+    def _f(name):
+        return (form.get(name) or "").strip()
+
+    bluesky = {
+        "enabled": form.get("bluesky_enabled") == "on",
+        "handle": _f("bluesky_handle"),
+        "app_password": _f("bluesky_app_password"),
+    }
+    x = {
+        "enabled": form.get("x_enabled") == "on",
+        "api_key": _f("x_api_key"),
+        "api_secret": _f("x_api_secret"),
+        "access_token": _f("x_access_token"),
+        "access_secret": _f("x_access_secret"),
+    }
+    threads = {
+        "enabled": form.get("threads_enabled") == "on",
+        "user_id": _f("threads_user_id"),
+        "access_token": _f("threads_access_token"),
+    }
+
+    # Validate that an enabled platform has its required credentials.
+    if bluesky["enabled"] and not (bluesky["handle"] and bluesky["app_password"]):
+        return _notif_response(request, script_id, flash="Bluesky needs a handle and app password.", flash_type="error")
+    if x["enabled"] and not all([x["api_key"], x["api_secret"], x["access_token"], x["access_secret"]]):
+        return _notif_response(request, script_id, flash="X needs all four OAuth keys.", flash_type="error")
+    if threads["enabled"] and not (threads["user_id"] and threads["access_token"]):
+        return _notif_response(request, script_id, flash="Threads needs a user ID and access token.", flash_type="error")
+
+    try:
+        max_posts = int(_f("max_posts_per_run") or "5")
+    except ValueError:
+        max_posts = 5
+
+    config = {
+        "bluesky": bluesky,
+        "x": x,
+        "threads": threads,
+        "max_posts_per_run": max(0, max_posts),
+        "post_new": form.get("post_new") == "on",
+        "post_removed": form.get("post_removed") == "on",
+    }
+    # Channel-level enabled = any platform enabled.
+    any_enabled = bluesky["enabled"] or x["enabled"] or threads["enabled"]
+    _upsert_notification(script_id, "social", any_enabled, config)
+    return _notif_response(request, script_id, flash="Social posting settings saved.", flash_type="success")
+
+
+@router.post("/scripts/{script_id}/notifications/test-social/{platform}", response_class=HTMLResponse)
+def test_social(request: Request, script_id: int, platform: str, csrf: str = Depends(verify_csrf)):
+    script = _get_script(script_id)
+    if not script:
+        return RedirectResponse("/", status_code=303)
+
+    if platform not in ("bluesky", "x", "threads"):
+        return _notif_response(request, script_id, flash="Unknown platform.", flash_type="error")
+
+    notif = _get_notification(script_id, "social")
+    cfg = (notif or {}).get("config", {}).get(platform, {})
+    if not cfg or not cfg.get("enabled"):
+        return _notif_response(request, script_id, flash=f"{platform.title()} is not enabled.", flash_type="error")
+
+    import social  # repo-root module; admin runs with project root on sys.path
+
+    text = f"✅ Test post from RivianCrawlr admin — {platform} posting is working."
+    try:
+        ref = social.POSTERS[platform](cfg, text, "")
+        return _notif_response(request, script_id, flash=f"Test post sent to {platform.title()} ({ref}).", flash_type="success")
+    except Exception as e:
+        return _notif_response(request, script_id, flash=f"{platform.title()} test failed: {e}", flash_type="error")
+
+
 def _notif_response(request: Request, script_id: int, flash: str = None, flash_type: str = "info"):
     script = _get_script(script_id)
     email_notif = _get_notification(script_id, "email")
     discord_notif = _get_notification(script_id, "discord")
+    social_notif = _get_notification(script_id, "social")
 
     return templates.TemplateResponse("script_notifications.html", {
         "request": request,
@@ -307,6 +391,7 @@ def _notif_response(request: Request, script_id: int, flash: str = None, flash_t
         "is_offers": "offers" in (script["name"] if script else ""),
         "email": email_notif or {"enabled": False, "config": {}},
         "discord": discord_notif or {"enabled": False, "config": {}},
+        "social": social_notif or {"enabled": False, "config": {}},
         "csrf_token": request.state.csrf_token,
         "flash_message": flash,
         "flash_type": flash_type,
