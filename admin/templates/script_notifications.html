@@ -197,8 +197,11 @@
 
     <fieldset>
       <legend><strong>X / Twitter</strong>
-        <small>(<a href="https://developer.x.com" target="_blank" rel="noopener">developer.x.com</a> → app with Read+Write)</small>
+        <small>(<a href="https://developer.x.com" target="_blank" rel="noopener">developer.x.com</a> → App with <em>Read and Write</em> permission; regenerate the access token after changing permissions)</small>
       </legend>
+      <p><small><strong>Note:</strong> X has no free tier as of 2026 — posting is
+        pay-per-use (~$0.015 per text post, ~$0.20 per post with a link) and
+        needs pre-purchased credits. Bluesky and Threads are free.</small></p>
       <label>
         <input type="checkbox" name="x_enabled" role="switch"
                {% if social.config.get('x', {}).get('enabled') %}checked{% endif %}>
