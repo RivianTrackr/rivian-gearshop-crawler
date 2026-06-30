@@ -26,6 +26,9 @@ from availability import infer_availability_from_html, get_avail_html_checks, re
 # Notification retry queue and error alerting
 from notify import retry_queue, send_error_alert
 
+# Social media posting primitives (X/Twitter, Bluesky, Threads)
+import social
+
 # Schema migrations
 from migrations import run_migrations
 
@@ -74,9 +77,24 @@ DISCORD_CONFIG = {
     "mention_on_changes": False,
 }
 
+# Social media auto-posting (X/Twitter, Bluesky, Threads). Posts text+link when
+# products are added or removed. Per-platform config loaded from admin DB / env.
+SOCIAL_CONFIG = {
+    "bluesky": {"enabled": False, "handle": "", "app_password": ""},
+    "x": {"enabled": False, "api_key": "", "api_secret": "",
+          "access_token": "", "access_secret": ""},
+    "threads": {"enabled": False, "user_id": "", "access_token": ""},
+    # Per-run cap: post up to this many products individually, then one summary.
+    "max_posts_per_run": 5,
+    # Post on new products / on removed products (both default on).
+    "post_new": True,
+    "post_removed": True,
+}
+
 def _load_notification_settings():
     """Load notification settings from admin DB, falling back to env vars."""
     global BREVO_API_KEY, EMAIL_FROM, EMAIL_TO, DISCORD_WEBHOOK_URL, DISCORD_CONFIG
+    global SOCIAL_CONFIG
 
     # Try admin DB first
     if os.path.exists(ADMIN_DB_PATH):
@@ -109,6 +127,24 @@ def _load_notification_settings():
                             if key in cfg:
                                 DISCORD_CONFIG[key] = cfg[key]
                         logger.info("Loaded Discord notification settings from admin DB")
+                    elif row["channel"] == "social":
+                        # One row holds all three platforms + run options.
+                        for plat in ("bluesky", "x", "threads"):
+                            sub = cfg.get(plat)
+                            if isinstance(sub, dict):
+                                SOCIAL_CONFIG[plat].update(sub)
+                            SOCIAL_CONFIG[plat]["enabled"] = (
+                                bool(row["enabled"]) and SOCIAL_CONFIG[plat].get("enabled", False)
+                            )
+                        if "max_posts_per_run" in cfg:
+                            try:
+                                SOCIAL_CONFIG["max_posts_per_run"] = int(cfg["max_posts_per_run"])
+                            except (ValueError, TypeError):
+                                pass
+                        for k in ("post_new", "post_removed"):
+                            if k in cfg:
+                                SOCIAL_CONFIG[k] = bool(cfg[k])
+                        logger.info("Loaded social notification settings from admin DB")
             conn.close()
         except Exception as e:
             logger.warning("Could not load notification settings from admin DB: %s", e)
@@ -122,6 +158,34 @@ def _load_notification_settings():
         EMAIL_TO = [e.strip() for e in os.getenv("EMAIL_TO", "you@example.com").split(",") if e.strip()]
     if not DISCORD_WEBHOOK_URL:
         DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+
+    # Social: env vars fill any platform not configured via admin DB.
+    _bsky = SOCIAL_CONFIG["bluesky"]
+    if not _bsky.get("handle") and os.getenv("BLUESKY_HANDLE"):
+        _bsky["handle"] = os.getenv("BLUESKY_HANDLE", "")
+        _bsky["app_password"] = os.getenv("BLUESKY_APP_PASSWORD", "")
+        _bsky["enabled"] = bool(_bsky["handle"] and _bsky["app_password"])
+
+    _x = SOCIAL_CONFIG["x"]
+    if not _x.get("api_key") and os.getenv("X_API_KEY"):
+        _x["api_key"] = os.getenv("X_API_KEY", "")
+        _x["api_secret"] = os.getenv("X_API_SECRET", "")
+        _x["access_token"] = os.getenv("X_ACCESS_TOKEN", "")
+        _x["access_secret"] = os.getenv("X_ACCESS_SECRET", "")
+        _x["enabled"] = all([_x["api_key"], _x["api_secret"],
+                             _x["access_token"], _x["access_secret"]])
+
+    _th = SOCIAL_CONFIG["threads"]
+    if not _th.get("user_id") and os.getenv("THREADS_USER_ID"):
+        _th["user_id"] = os.getenv("THREADS_USER_ID", "")
+        _th["access_token"] = os.getenv("THREADS_ACCESS_TOKEN", "")
+        _th["enabled"] = bool(_th["user_id"] and _th["access_token"])
+
+    if os.getenv("SOCIAL_MAX_POSTS_PER_RUN"):
+        try:
+            SOCIAL_CONFIG["max_posts_per_run"] = int(os.getenv("SOCIAL_MAX_POSTS_PER_RUN"))
+        except (ValueError, TypeError):
+            pass
 
 _load_notification_settings()
 
@@ -945,6 +1009,121 @@ def _error_alert_ctx():
     )
 
 
+def _social_enabled_platforms():
+    return [p for p in ("bluesky", "x", "threads") if SOCIAL_CONFIG[p].get("enabled")]
+
+
+def _build_social_message(change_type, product):
+    """Return (text, link) for a single product change.
+
+    New: brand-neutral announcement with the product URL (link).
+    Removed: soft 'removed' phrasing, no link (removed pages would 404)."""
+    title = (product.get("title") or "").strip() or "a product"
+    if change_type == "new":
+        url = (product.get("url") or "").strip()
+        text = f"🆕 New at the Rivian Gear Shop: {title} {url}".strip()
+        return social.clamp_message(text, link=url), url
+    # removed
+    text = f"📦 Removed from the Rivian Gear Shop: {title}"
+    return social.clamp_message(text), ""
+
+
+def _already_posted_social(product_id, change_type, platform):
+    conn = db()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM social_posts WHERE product_id=? AND change_type=? AND platform=?",
+            (product_id, change_type, platform),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def _social_post_one(platform, change_type, product_id, text, link):
+    """Post one message to one platform and record it for de-duplication.
+
+    Raises on API failure so the retry queue can re-run it; the dedup row is
+    only written after a successful post (covers both inline and retried runs).
+    """
+    ref = social.POSTERS[platform](SOCIAL_CONFIG[platform], text, link)
+    conn = db()
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO social_posts "
+            "(product_id, change_type, platform, posted_at, post_ref) VALUES (?,?,?,?,?)",
+            (product_id, change_type, platform, now_utc_iso(), str(ref or "")),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _dispatch_social(platform, change_type, product_id, text, link):
+    """Post inline; on failure enqueue for the shared retry queue."""
+    label = f"social:{platform}:{change_type}"
+    try:
+        _social_post_one(platform, change_type, product_id, text, link)
+    except Exception as e:
+        logger.error("%s post failed: %s", label, e)
+        retry_queue.enqueue(label, _social_post_one,
+                            args=(platform, change_type, product_id, text, link))
+
+
+def send_social(new_products=None, removed_products=None):
+    """Auto-post added/removed products to enabled social platforms.
+
+    Posts up to ``max_posts_per_run`` products individually (newest adds first,
+    then removals), then a single summary post covering any overflow. Excludes
+    variant price/availability changes by design — adds and removes only."""
+    platforms = _social_enabled_platforms()
+    if not platforms:
+        return
+
+    events = []
+    if SOCIAL_CONFIG.get("post_new", True):
+        events += [("new", p) for p in (new_products or [])]
+    if SOCIAL_CONFIG.get("post_removed", True):
+        events += [("removed", p) for p in (removed_products or [])]
+    if not events:
+        return
+
+    cap = max(0, int(SOCIAL_CONFIG.get("max_posts_per_run", 5)))
+    individual, overflow = events[:cap], events[cap:]
+
+    for change_type, product in individual:
+        product_id = product.get("product_id")
+        text, link = _build_social_message(change_type, product)
+        for platform in platforms:
+            if product_id is not None and _already_posted_social(product_id, change_type, platform):
+                continue
+            _dispatch_social(platform, change_type, product_id, text, link)
+
+    if overflow:
+        n_new = sum(1 for ct, _ in overflow if ct == "new")
+        n_removed = len(overflow) - n_new
+        bits = []
+        if n_new:
+            bits.append(f"{n_new} new item{'s' if n_new != 1 else ''}")
+        if n_removed:
+            bits.append(f"{n_removed} removed")
+        summary = (
+            f"📰 Plus {' and '.join(bits)} at the Rivian Gear Shop — "
+            f"see the full catalog: {COLLECTION_URL}"
+        )
+        summary = social.clamp_message(summary, link=COLLECTION_URL)
+        for platform in platforms:
+            label = f"social:{platform}:summary"
+            try:
+                social.POSTERS[platform](SOCIAL_CONFIG[platform], summary, COLLECTION_URL)
+            except Exception as e:
+                logger.error("%s post failed: %s", label, e)
+                retry_queue.enqueue(
+                    label,
+                    lambda p=platform, t=summary: social.POSTERS[p](SOCIAL_CONFIG[p], t, COLLECTION_URL),
+                )
+
+
 def _process_run(crawled_at, run_start, links):
     """Post-discovery body of main(): walk products, write DB, send notifications.
     Runs with the Playwright browser kept alive so HTTP helpers can route
@@ -1329,6 +1508,14 @@ def _process_run(crawled_at, run_start, links):
             new_products=new_products_report_block,
             removed_products=removed_products_report_block,
         )
+
+        # Auto-post adds/removes to social media (skipped on the initial catalog
+        # crawl so we don't dump the entire existing inventory onto X/Bluesky).
+        if not is_initial:
+            send_social(
+                new_products=new_products_report_block,
+                removed_products=removed_products_report_block,
+            )
 
         # Remember newly reported removals to avoid re-emailing every run
         if removed_products_report_block:
