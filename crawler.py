@@ -356,6 +356,19 @@ CREATE TABLE IF NOT EXISTS removed_once (
   product_id INTEGER PRIMARY KEY,
   first_reported_at TEXT NOT NULL
 );
+
+-- De-duplication of social media posts (also created by migration v5). Kept in
+-- the hardcoded schema so it exists on every init_db() even if this database's
+-- migration-version tracking is out of sync — otherwise a skipped v5 leaves
+-- send_social() crashing on a missing table.
+CREATE TABLE IF NOT EXISTS social_posts (
+  product_id INTEGER NOT NULL,
+  change_type TEXT NOT NULL,   -- 'new' or 'removed'
+  platform TEXT NOT NULL,      -- 'bluesky', 'x', 'threads'
+  posted_at TEXT NOT NULL,
+  post_ref TEXT,               -- platform post id / URI for audit
+  PRIMARY KEY (product_id, change_type, platform)
+);
 """
 
 def db():
@@ -1091,12 +1104,21 @@ def send_social(new_products=None, removed_products=None):
     cap = max(0, int(SOCIAL_CONFIG.get("max_posts_per_run", 5)))
     individual, overflow = events[:cap], events[cap:]
 
+    logger.info(
+        "Social: %d change(s) to post to %s%s",
+        len(events), ", ".join(platforms),
+        f"; capping at {cap} individual + summary" if overflow else "",
+    )
+
+    attempted = skipped = 0
     for change_type, product in individual:
         product_id = product.get("product_id")
         text, link = _build_social_message(change_type, product)
         for platform in platforms:
             if product_id is not None and _already_posted_social(product_id, change_type, platform):
+                skipped += 1
                 continue
+            attempted += 1
             _dispatch_social(platform, change_type, product_id, text, link)
 
     if overflow:
@@ -1114,6 +1136,7 @@ def send_social(new_products=None, removed_products=None):
         summary = social.clamp_message(summary, link=COLLECTION_URL)
         for platform in platforms:
             label = f"social:{platform}:summary"
+            attempted += 1
             try:
                 social.POSTERS[platform](SOCIAL_CONFIG[platform], summary, COLLECTION_URL)
             except Exception as e:
@@ -1122,6 +1145,11 @@ def send_social(new_products=None, removed_products=None):
                     label,
                     lambda p=platform, t=summary: social.POSTERS[p](SOCIAL_CONFIG[p], t, COLLECTION_URL),
                 )
+
+    logger.info(
+        "Social: %d post(s) attempted, %d skipped (already posted)",
+        attempted, skipped,
+    )
 
 
 def _process_run(crawled_at, run_start, links):
