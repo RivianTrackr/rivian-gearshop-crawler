@@ -1,5 +1,7 @@
 """Tests for social.py posting primitives and crawler.send_social orchestration."""
 
+import logging
+import sqlite3
 import tempfile
 import os
 from unittest.mock import MagicMock, patch
@@ -150,3 +152,25 @@ class TestSendSocial:
             crawler_db.send_social(new_products=[{"product_id": 9, "title": "T", "url": "u"}])
         assert crawler_db.retry_queue.pending_count == 1
         crawler_db.retry_queue._queue.clear()
+
+    def test_logs_attempt_summary(self, crawler_db, caplog):
+        crawler_db.SOCIAL_CONFIG["x"].update(
+            enabled=True, api_key="a", api_secret="b",
+            access_token="c", access_secret="d")
+        with patch.dict(social.POSTERS, {"x": MagicMock(return_value="id1")}):
+            with caplog.at_level(logging.INFO, logger="crawler"):
+                crawler_db.send_social(new_products=[{"product_id": 1, "title": "T", "url": "u"}])
+        msgs = " ".join(r.getMessage() for r in caplog.records)
+        assert "attempted" in msgs
+
+
+class TestSchemaHardening:
+    def test_schema_creates_social_posts_without_migrations(self):
+        """Executing the hardcoded SCHEMA alone (no migrations) must create
+        social_posts, so a DB with out-of-sync migration versions can't strand
+        send_social() on a missing table."""
+        import crawler
+        con = sqlite3.connect(":memory:")
+        con.executescript(crawler.SCHEMA)
+        cols = [r[1] for r in con.execute("PRAGMA table_info(social_posts)")]
+        assert cols == ["product_id", "change_type", "platform", "posted_at", "post_ref"]
