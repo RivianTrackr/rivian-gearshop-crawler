@@ -109,6 +109,29 @@ MIGRATIONS = [
         ALTER TABLE offers_crawl_markers ADD COLUMN body_hash TEXT;
         """,
     ),
+    (
+        3,
+        "Add performance indexes for offer snapshot, marker and listing lookups",
+        """
+        -- The v1 index is on (offer_id, crawled_at DESC), but the hot reads and
+        -- the retention prune both order by `id DESC`.
+        CREATE INDEX IF NOT EXISTS idx_offer_snapshots_offer_id
+            ON offer_snapshots(offer_id, id DESC);
+
+        -- Removal detection probes markers by offer_id, which the
+        -- (crawled_at, offer_id) primary key cannot serve.
+        CREATE INDEX IF NOT EXISTS idx_offers_crawl_markers_offer
+            ON offers_crawl_markers(offer_id, crawled_at DESC);
+
+        -- Admin offer list is ordered by updated_at DESC with LIMIT/OFFSET.
+        CREATE INDEX IF NOT EXISTS idx_offers_updated
+            ON offers(updated_at DESC);
+
+        -- Crawl-history pagination.
+        CREATE INDEX IF NOT EXISTS idx_offers_crawl_runs_started
+            ON offers_crawl_runs(started_at DESC);
+        """,
+    ),
 ]
 
 

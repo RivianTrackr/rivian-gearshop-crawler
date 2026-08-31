@@ -27,6 +27,7 @@ from playwright.sync_api import sync_playwright
 
 from notify import retry_queue, send_error_alert
 from offers_migrations import run_migrations
+import dbtune
 
 # ---------------------- Config & Logging ----------------------
 
@@ -140,6 +141,37 @@ OFFER_DELAY = float(os.getenv("OFFERS_DELAY", "0.5"))
 MAX_OFFERS = int(os.getenv("OFFERS_MAX", "200"))
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))
 SNAPSHOT_RETENTION = 30
+
+
+# crawl markers gain one row per offer per run and, until now, were never
+# pruned: on an hourly timer with 40 offers that is ~1k rows a day
+# accumulating forever. Detection only ever consults the newest few runs, so
+# everything older is dead weight in the file, the page cache and every backup.
+# Floor of 3 runs because removal detection compares the current run against
+# the two before it.
+MARKER_RETENTION_RUNS = max(3, int(os.getenv("MARKER_RETENTION_RUNS", "720")))  # ~30 days hourly
+
+
+def prune_crawl_markers(conn, retention_runs=MARKER_RETENTION_RUNS):
+    """Drop offers_crawl_markers rows older than the newest `retention_runs` runs.
+
+    Returns the number of rows deleted.
+    """
+    retention_runs = max(3, retention_runs)
+    cutoff = conn.execute(
+        """
+        SELECT crawled_at FROM (
+            SELECT DISTINCT crawled_at FROM offers_crawl_markers
+            ORDER BY crawled_at DESC LIMIT 1 OFFSET ?
+        )
+        """,
+        (retention_runs - 1,),
+    ).fetchone()
+    if not cutoff:
+        # Fewer distinct runs than the retention window — nothing to prune.
+        return 0
+    conn.execute("DELETE FROM offers_crawl_markers WHERE crawled_at < ?", (cutoff[0],))
+    return conn.execute("SELECT changes()").fetchone()[0]
 MAX_RUN_SECONDS = int(os.getenv("OFFERS_MAX_RUN_SECONDS", "600"))
 
 HEADERS = {"User-Agent": "RivianOffersCrawler/1.0 (+https://riviantrackr.com)"}
@@ -160,15 +192,19 @@ def today_utc_str() -> str:
 def db():
     conn = sqlite3.connect(OFFERS_DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    dbtune.apply_connection_pragmas(conn)
     return conn
 
 
 def init_db():
     conn = db()
     try:
-        conn.execute("PRAGMA journal_mode=WAL")
-        run_migrations(conn)
+        applied = run_migrations(conn)
+        if applied:
+            # New indexes are useless to the planner until it has statistics.
+            dbtune.analyze(conn)
     finally:
+        dbtune.optimize(conn)
         conn.close()
 
 
@@ -1116,6 +1152,11 @@ def main():
         pruned = conn.execute("SELECT changes()").fetchone()[0]
         if pruned:
             log(f"Pruned {pruned} old snapshot rows.")
+
+        # --- Prune old crawl markers: keep only the latest N runs ---
+        marker_rows = prune_crawl_markers(conn)
+        if marker_rows:
+            log(f"Pruned {marker_rows} old offers_crawl_markers rows.")
 
         conn.commit()
         cur.close()

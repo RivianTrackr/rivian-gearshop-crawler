@@ -20,16 +20,43 @@ echo "==> Creating install directory: ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
 
 echo "==> Copying project files..."
-cp "${REPO_DIR}/crawler.py" "${INSTALL_DIR}/"
-cp "${REPO_DIR}/availability.py" "${INSTALL_DIR}/"
-cp "${REPO_DIR}/notify.py" "${INSTALL_DIR}/"
-cp "${REPO_DIR}/migrations.py" "${INSTALL_DIR}/"
-cp "${REPO_DIR}/support_crawler.py" "${INSTALL_DIR}/"
-cp "${REPO_DIR}/support_migrations.py" "${INSTALL_DIR}/"
-cp "${REPO_DIR}/requirements.txt" "${INSTALL_DIR}/"
+# Every top-level module the three crawlers and the admin UI import. Keep this
+# list complete: crawler.py does `import social` and `import dbtune` at module
+# scope, so a missing file here is not a degraded install, it is a crawler that
+# dies on startup with ModuleNotFoundError.
+PROJECT_MODULES=(
+    crawler.py
+    availability.py
+    notify.py
+    migrations.py
+    social.py
+    dbtune.py
+    support_crawler.py
+    support_migrations.py
+    offers_crawler.py
+    offers_migrations.py
+    requirements.txt
+)
+for module in "${PROJECT_MODULES[@]}"; do
+    cp "${REPO_DIR}/${module}" "${INSTALL_DIR}/"
+done
 cp -r "${REPO_DIR}/admin" "${INSTALL_DIR}/"
 cp "${REPO_DIR}/.env" "${INSTALL_DIR}/"
 chmod 600 "${INSTALL_DIR}/.env"
+
+# Also stage the unit files inside INSTALL_DIR. The admin UI's Deploy page
+# installs units by copying them out of each script's working_directory
+# (= INSTALL_DIR), so without these it reports "not found".
+cp "${REPO_DIR}"/*.service "${REPO_DIR}"/*.timer "${INSTALL_DIR}/"
+
+# Fail loudly now rather than at the first timer firing.
+echo "==> Verifying every imported module is present..."
+for module in "${PROJECT_MODULES[@]}"; do
+    if [[ ! -f "${INSTALL_DIR}/${module}" ]]; then
+        echo "ERROR: ${module} missing from ${INSTALL_DIR}" >&2
+        exit 1
+    fi
+done
 
 echo "==> Creating Python virtual environment..."
 python3 -m venv "${INSTALL_DIR}/venv"
@@ -45,6 +72,8 @@ cp "${REPO_DIR}/rivian-gearshop-crawler.service" /etc/systemd/system/
 cp "${REPO_DIR}/rivian-gearshop-crawler.timer" /etc/systemd/system/
 cp "${REPO_DIR}/rivian-support-crawler.service" /etc/systemd/system/
 cp "${REPO_DIR}/rivian-support-crawler.timer" /etc/systemd/system/
+cp "${REPO_DIR}/rivian-offers-crawler.service" /etc/systemd/system/
+cp "${REPO_DIR}/rivian-offers-crawler.timer" /etc/systemd/system/
 
 echo "==> Installing admin UI service..."
 cp "${REPO_DIR}/gearshop-admin.service" /etc/systemd/system/
@@ -70,6 +99,8 @@ systemctl enable rivian-gearshop-crawler.timer
 systemctl start rivian-gearshop-crawler.timer
 systemctl enable rivian-support-crawler.timer
 systemctl start rivian-support-crawler.timer
+systemctl enable rivian-offers-crawler.timer
+systemctl start rivian-offers-crawler.timer
 systemctl enable gearshop-admin.service
 systemctl start gearshop-admin.service
 
@@ -79,7 +110,7 @@ echo "  Setup complete!"
 echo "=========================================="
 echo ""
 echo "  Install dir:  ${INSTALL_DIR}"
-echo "  Timer:        every 60 minutes"
+echo "  Timers:       hourly — gear shop :05, support :25, offers :45"
 echo "  Admin UI:     https://riviancrawlr.com (via Cloudflare)"
 echo "  Local:        http://127.0.0.1:8111"
 echo "  Config:       ${INSTALL_DIR}/.env"
@@ -87,6 +118,7 @@ echo ""
 echo "  Useful commands:"
 echo "    systemctl status rivian-gearshop-crawler.timer   # check gearshop timer"
 echo "    systemctl status rivian-support-crawler.timer    # check support timer"
+echo "    systemctl status rivian-offers-crawler.timer     # check offers timer"
 echo "    systemctl status gearshop-admin.service          # check admin UI"
 echo "    systemctl list-timers --all                      # list all timers"
 echo "    journalctl -u rivian-gearshop-crawler -f         # follow gearshop logs"

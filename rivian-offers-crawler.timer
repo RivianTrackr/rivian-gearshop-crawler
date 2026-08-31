@@ -1,10 +1,16 @@
 [Unit]
-Description=Run Rivian Offers Crawler every 60 minutes
+Description=Run Rivian Offers Crawler hourly at :45
 
 [Timer]
-OnBootSec=7min
-OnUnitActiveSec=60min
-RandomizedDelaySec=30
+# Fixed wall-clock slots rather than OnUnitActiveSec, which measures from the
+# END of the previous run and so drifts by however long that run took. With
+# three crawlers drifting independently they eventually converge and launch
+# three headless Chromium instances at once. Fixed slots 20 minutes apart keep
+# them separated indefinitely:
+#   :05 gear shop   :25 support   :45 offers
+OnCalendar=*-*-* *:45:00
+RandomizedDelaySec=60
+# Run once after a reboot if a slot was missed while the machine was down.
 Persistent=true
 
 [Install]

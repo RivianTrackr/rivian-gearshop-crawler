@@ -28,6 +28,7 @@ from playwright.sync_api import sync_playwright
 
 from notify import retry_queue, send_error_alert
 from support_migrations import run_migrations
+import dbtune
 
 # ---------------------- Config & Logging ----------------------
 
@@ -147,6 +148,37 @@ MAX_ARTICLES = int(os.getenv("SUPPORT_MAX_ARTICLES", "1000"))
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))
 SNAPSHOT_RETENTION = 30
 
+
+# crawl markers gain one row per article per run and, until now, were never
+# pruned: on an hourly timer with 600 articles that is ~14k rows a day
+# accumulating forever. Detection only ever consults the newest few runs, so
+# everything older is dead weight in the file, the page cache and every backup.
+# Floor of 3 runs because removal detection compares the current run against
+# the two before it.
+MARKER_RETENTION_RUNS = max(3, int(os.getenv("MARKER_RETENTION_RUNS", "720")))  # ~30 days hourly
+
+
+def prune_crawl_markers(conn, retention_runs=MARKER_RETENTION_RUNS):
+    """Drop support_crawl_markers rows older than the newest `retention_runs` runs.
+
+    Returns the number of rows deleted.
+    """
+    retention_runs = max(3, retention_runs)
+    cutoff = conn.execute(
+        """
+        SELECT crawled_at FROM (
+            SELECT DISTINCT crawled_at FROM support_crawl_markers
+            ORDER BY crawled_at DESC LIMIT 1 OFFSET ?
+        )
+        """,
+        (retention_runs - 1,),
+    ).fetchone()
+    if not cutoff:
+        # Fewer distinct runs than the retention window — nothing to prune.
+        return 0
+    conn.execute("DELETE FROM support_crawl_markers WHERE crawled_at < ?", (cutoff[0],))
+    return conn.execute("SELECT changes()").fetchone()[0]
+
 HEADERS = {
     "User-Agent": "RivianSupportCrawler/1.0 (+https://riviantrackr.com)"
 }
@@ -171,6 +203,7 @@ def db():
     # retry-on-locked wrapper around acquire-points.
     conn = sqlite3.connect(SUPPORT_DB_PATH, timeout=60)
     conn.row_factory = sqlite3.Row
+    dbtune.apply_connection_pragmas(conn)
     return conn
 
 
@@ -198,9 +231,11 @@ def _retry_on_db_locked(fn, *, max_attempts=4, base_delay=1.0, label="operation"
 def init_db():
     conn = db()
     try:
-        conn.execute("PRAGMA journal_mode=WAL")
-        run_migrations(conn)
+        applied = run_migrations(conn)
+        if applied:
+            dbtune.analyze(conn)
     finally:
+        dbtune.optimize(conn)
         conn.close()
 
 
@@ -1240,6 +1275,11 @@ def main():
         pruned = conn.execute("SELECT changes()").fetchone()[0]
         if pruned:
             log(f"Pruned {pruned} old snapshot rows.")
+
+        # --- Prune old crawl markers: keep only the latest N runs ---
+        marker_rows = prune_crawl_markers(conn)
+        if marker_rows:
+            log(f"Pruned {marker_rows} old support_crawl_markers rows.")
 
         conn.commit()
         cur.close()

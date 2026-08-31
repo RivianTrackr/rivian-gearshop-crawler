@@ -2,6 +2,8 @@ import sqlite3
 import secrets
 from datetime import datetime, timezone
 
+import dbtune
+
 from admin.config import ADMIN_DB_PATH
 from admin.auth import hash_password
 
@@ -74,16 +76,17 @@ OFFERS_SCRIPT = {
 
 
 def get_admin_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(ADMIN_DB_PATH)
+    conn = sqlite3.connect(ADMIN_DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    dbtune.apply_connection_pragmas(conn)
     return conn
 
 
 def get_crawler_db(db_path: str) -> sqlite3.Connection:
     """Open a crawler DB in read-only mode."""
-    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30)
     conn.row_factory = sqlite3.Row
+    dbtune.apply_connection_pragmas(conn, read_only=True)
     return conn
 
 
@@ -93,7 +96,7 @@ def get_crawler_db_rw(db_path: str) -> sqlite3.Connection:
     # fast while a crawl holds the lock — and vice versa.
     conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    dbtune.apply_connection_pragmas(conn)
     return conn
 
 

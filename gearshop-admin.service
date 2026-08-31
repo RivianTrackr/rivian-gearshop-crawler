@@ -7,10 +7,18 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/opt/rivian-gearshop-crawler
-ExecStart=/opt/rivian-gearshop-crawler/venv/bin/uvicorn admin.app:app --host 127.0.0.1 --port 8111
+# --proxy-headers + --forwarded-allow-ips makes request.client.host the real
+# client address from nginx's X-Forwarded-For instead of 127.0.0.1. Without it
+# every login attempt shares a single rate-limit bucket, so five failures from
+# anyone lock out everybody.
+ExecStart=/opt/rivian-gearshop-crawler/venv/bin/uvicorn admin.app:app \
+    --host 127.0.0.1 --port 8111 \
+    --proxy-headers --forwarded-allow-ips=127.0.0.1
 Environment=PATH=/opt/rivian-gearshop-crawler/venv/bin:/usr/bin:/bin
-Restart=on-failure
+Restart=always
 RestartSec=5
+# Deliberately NOT sandboxed: this unit installs unit files into
+# /etc/systemd/system and shells out to systemctl for the Deploy page.
 StandardOutput=journal
 StandardError=journal
 

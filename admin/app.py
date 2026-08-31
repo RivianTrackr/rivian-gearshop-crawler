@@ -8,7 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from admin.db import init_admin_db
 from admin.auth import validate_session_token, get_csrf_token, create_session_token, COOKIE_NAME
-from admin.config import SESSION_MAX_AGE
+from admin.config import SESSION_MAX_AGE, COOKIE_SECURE, COOKIE_SAMESITE
 from admin.routes import auth_routes, dashboard, scripts, config_editor, data_viewer, settings, notifications, deploy, content_filters
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -65,7 +65,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         new_token = create_session_token(session["uid"])
         response.set_cookie(
             COOKIE_NAME, new_token,
-            httponly=True, samesite="lax", max_age=SESSION_MAX_AGE,
+            httponly=True, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE,
+            max_age=SESSION_MAX_AGE,
         )
 
         return response
