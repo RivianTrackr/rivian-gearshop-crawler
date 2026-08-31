@@ -142,7 +142,7 @@ def products_list(request: Request, script_id: int,
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("data_products.html", {
+    return templates.TemplateResponse(request, "data_products.html", {
         "request": request,
         "script": script,
         "products": products,
@@ -185,7 +185,7 @@ def product_detail(request: Request, script_id: int, product_id: int):
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("data_viewer.html", {
+    return templates.TemplateResponse(request, "data_viewer.html", {
         "request": request,
         "script": script,
         "product": product,
@@ -224,7 +224,7 @@ def variant_history(request: Request, script_id: int, variant_id: int):
             "available": bool(s["available"]) if s["available"] is not None else None,
         })
 
-    return templates.TemplateResponse("data_snapshots.html", {
+    return templates.TemplateResponse(request, "data_snapshots.html", {
         "request": request,
         "script": script,
         "variant_id": variant_id,
@@ -254,7 +254,7 @@ def crawl_history(request: Request, script_id: int, page: int = Query(1, ge=1)):
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("crawl_history.html", {
+    return templates.TemplateResponse(request, "crawl_history.html", {
         "request": request,
         "script": script,
         "stats": stats,
@@ -394,7 +394,7 @@ def articles_list(request: Request, script_id: int,
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("data_articles.html", {
+    return templates.TemplateResponse(request, "data_articles.html", {
         "request": request,
         "script": script,
         "articles": articles,
@@ -466,7 +466,7 @@ def article_detail(request: Request, script_id: int, article_id: int):
             "url_changed": url_changed,
         })
 
-    return templates.TemplateResponse("data_article_detail.html", {
+    return templates.TemplateResponse(request, "data_article_detail.html", {
         "request": request,
         "script": script,
         "article": article,
@@ -604,7 +604,7 @@ def offers_list(request: Request, script_id: int,
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("data_offers.html", {
+    return templates.TemplateResponse(request, "data_offers.html", {
         "request": request,
         "script": script,
         "offers": offers,
@@ -676,7 +676,7 @@ def offer_detail(request: Request, script_id: int, offer_id: int):
             "url_changed": url_changed,
         })
 
-    return templates.TemplateResponse("data_offer_detail.html", {
+    return templates.TemplateResponse(request, "data_offer_detail.html", {
         "request": request,
         "script": script,
         "offer": offer,
@@ -705,7 +705,7 @@ def offers_crawl_history(request: Request, script_id: int, page: int = Query(1, 
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("crawl_history.html", {
+    return templates.TemplateResponse(request, "crawl_history.html", {
         "request": request,
         "script": script,
         "stats": stats,
@@ -737,7 +737,7 @@ def support_crawl_history(request: Request, script_id: int, page: int = Query(1,
     finally:
         cdb.close()
 
-    return templates.TemplateResponse("crawl_history.html", {
+    return templates.TemplateResponse(request, "crawl_history.html", {
         "request": request,
         "script": script,
         "stats": stats,

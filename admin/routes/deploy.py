@@ -118,7 +118,7 @@ def deploy_page(request: Request):
     git_info = _git_status()
     units = _get_unit_status()
 
-    return templates.TemplateResponse("deploy.html", {
+    return templates.TemplateResponse(request, "deploy.html", {
         "request": request,
         "git": git_info,
         "units": units,
@@ -132,7 +132,7 @@ def deploy_page(request: Request):
 def _deploy_response(request: Request, flash: str, flash_type: str = "info"):
     git_info = _git_status()
     units = _get_unit_status()
-    return templates.TemplateResponse("deploy.html", {
+    return templates.TemplateResponse(request, "deploy.html", {
         "request": request,
         "git": git_info,
         "units": units,

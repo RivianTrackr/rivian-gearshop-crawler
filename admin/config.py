@@ -36,6 +36,16 @@ ADMIN_PORT = int(os.getenv("ADMIN_PORT", "8111"))
 ADMIN_DB_PATH = os.getenv("ADMIN_DB_PATH", os.path.join(os.getcwd(), "admin.db"))
 SESSION_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
+# Mark the session cookie Secure so browsers only ever send it over HTTPS.
+# The panel is reached at https://riviancrawlr.com, so this is right in
+# production. Set ADMIN_COOKIE_SECURE=0 when reaching the panel directly over
+# plain HTTP (e.g. http://127.0.0.1:8111 through an SSH tunnel), otherwise the
+# browser will withhold the cookie and every request bounces back to /login.
+COOKIE_SECURE = os.getenv("ADMIN_COOKIE_SECURE", "1").strip().lower() not in ("0", "false", "no")
+
+# Lax already blocks cross-site POSTs; the app also checks a CSRF token.
+COOKIE_SAMESITE = "lax"
+
 # Config keys that must never be exposed in the config editor
 HIDDEN_CONFIG_KEYS = {"ADMIN_SECRET_KEY"}
 
@@ -47,7 +57,7 @@ KNOWN_ENV_KEYS = {
     "PRODUCT_DELAY", "MAX_SCROLL_SECONDS", "AVAIL_HTML_MAX",
     "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG", "JSON_OUT_PATH",
     "ADMIN_SECRET_KEY", "ADMIN_PORT", "ADMIN_DB_PATH",
-    "SCRIPT_NAME",
+    "ADMIN_COOKIE_SECURE", "SCRIPT_NAME",
     # Support crawler
     "SUPPORT_URL", "SUPPORT_DB_PATH", "SUPPORT_SCRIPT_NAME",
     "SUPPORT_ARTICLE_DELAY", "SUPPORT_MAX_ARTICLES",
@@ -61,7 +71,7 @@ GLOBAL_ENV_KEYS = {
     "BREVO_API_KEY", "EMAIL_FROM", "EMAIL_TO",
     "DISCORD_WEBHOOK_URL", "ERROR_DISCORD_WEBHOOK_URL",
     "HEARTBEAT_UTC_HOUR", "CRAWLER_DEBUG",
-    "ADMIN_PORT", "ADMIN_DB_PATH",
+    "ADMIN_PORT", "ADMIN_DB_PATH", "ADMIN_COOKIE_SECURE",
 }
 
 # Keys specific to the gear shop crawler

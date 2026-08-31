@@ -12,3 +12,25 @@ Environment=PATH=/opt/rivian-gearshop-crawler/venv/bin:/usr/bin:/bin
 TimeoutStartSec=900
 StandardOutput=journal
 StandardError=journal
+
+# --- Sandboxing ---------------------------------------------------------
+# This unit drives headless Chromium over untrusted remote pages, so it gets
+# the strictest confinement that still lets it work. It stays User=root
+# because /opt/rivian-gearshop-crawler is root-owned; see README ("Running the
+# crawlers as a non-root user") for moving off root, which is the bigger win.
+NoNewPrivileges=true
+PrivateTmp=true
+# read-only, NOT `true`: Playwright installs Chromium under
+# /root/.cache/ms-playwright, and `ProtectHome=true` would hide it and break
+# every browser launch. read-only keeps the binary reachable while denying
+# writes. (Chromium's own profile goes to the private /tmp above.)
+ProtectHome=read-only
+ProtectSystem=full
+ReadWritePaths=/opt/rivian-gearshop-crawler
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

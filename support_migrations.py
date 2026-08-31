@@ -122,6 +122,34 @@ MIGRATIONS = [
                 datetime('now'));
         """,
     ),
+    (
+        6,
+        "Add performance indexes for article snapshot, marker and listing lookups",
+        """
+        -- The v1 index is on (article_id, crawled_at DESC), but the hot reads
+        -- and the retention prune both order by `id DESC`, so they could not
+        -- use it for ordering.
+        CREATE INDEX IF NOT EXISTS idx_article_snapshots_article_id
+            ON article_snapshots(article_id, id DESC);
+
+        -- Removal detection probes markers by article_id, which the
+        -- (crawled_at, article_id) primary key cannot serve.
+        CREATE INDEX IF NOT EXISTS idx_support_crawl_markers_article
+            ON support_crawl_markers(article_id, crawled_at DESC);
+
+        -- Admin article list is ordered by updated_at DESC with LIMIT/OFFSET.
+        CREATE INDEX IF NOT EXISTS idx_support_articles_updated
+            ON support_articles(updated_at DESC);
+
+        -- Crawl-history pagination.
+        CREATE INDEX IF NOT EXISTS idx_support_crawl_runs_started
+            ON support_crawl_runs(started_at DESC);
+
+        -- Retry-queue scans filter on status and due time.
+        CREATE INDEX IF NOT EXISTS idx_support_notification_queue_pending
+            ON support_notification_queue(status, next_retry_at);
+        """,
+    ),
 ]
 
 

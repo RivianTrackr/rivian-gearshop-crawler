@@ -31,6 +31,7 @@ import social
 
 # Schema migrations
 from migrations import run_migrations
+import dbtune
 
 # ---------------------- Config & Logging ----------------------
 
@@ -195,6 +196,37 @@ PRODUCT_DELAY      = float(os.getenv("PRODUCT_DELAY", "0.2"))      # pause betwe
 AVAIL_HTML_MAX     = int(os.getenv("AVAIL_HTML_MAX", "200"))       # 0 = unlimited HTML fallbacks
 HEARTBEAT_UTC_HOUR = int(os.getenv("HEARTBEAT_UTC_HOUR", "-1"))    # -1 = disabled
 SNAPSHOT_RETENTION = 30  # keep latest N snapshots per variant
+
+
+# crawl markers gain one row per product per run and, until now, were never
+# pruned: on an hourly timer with 300 products that is ~7k rows a day
+# accumulating forever. Detection only ever consults the newest few runs, so
+# everything older is dead weight in the file, the page cache and every backup.
+# Floor of 3 runs because removal detection compares the current run against
+# the two before it.
+MARKER_RETENTION_RUNS = max(3, int(os.getenv("MARKER_RETENTION_RUNS", "720")))  # ~30 days hourly
+
+
+def prune_crawl_markers(conn, retention_runs=MARKER_RETENTION_RUNS):
+    """Drop crawl_markers rows older than the newest `retention_runs` runs.
+
+    Returns the number of rows deleted.
+    """
+    retention_runs = max(3, retention_runs)
+    cutoff = conn.execute(
+        """
+        SELECT crawled_at FROM (
+            SELECT DISTINCT crawled_at FROM crawl_markers
+            ORDER BY crawled_at DESC LIMIT 1 OFFSET ?
+        )
+        """,
+        (retention_runs - 1,),
+    ).fetchone()
+    if not cutoff:
+        # Fewer distinct runs than the retention window — nothing to prune.
+        return 0
+    conn.execute("DELETE FROM crawl_markers WHERE crawled_at < ?", (cutoff[0],))
+    return conn.execute("SELECT changes()").fetchone()[0]
 
 # Browser-shaped headers. Shopify (fronted by Cloudflare) increasingly
 # returns 403 to identified-bot User-Agents on /products/<handle>.json
@@ -369,19 +401,38 @@ CREATE TABLE IF NOT EXISTS social_posts (
   post_ref TEXT,               -- platform post id / URI for audit
   PRIMARY KEY (product_id, change_type, platform)
 );
+
+-- Performance indexes (also created by migration v6). Kept here for the same
+-- reason as social_posts above: init_db() must yield a fully-indexed database
+-- even if this file's migration-version tracking is out of sync.
+CREATE INDEX IF NOT EXISTS idx_snapshots_variant_snapid
+  ON snapshots(variant_id, snapshot_id DESC);
+CREATE INDEX IF NOT EXISTS idx_snapshots_variant_crawled
+  ON snapshots(variant_id, crawled_at DESC);
+CREATE INDEX IF NOT EXISTS idx_crawl_markers_product_crawled
+  ON crawl_markers(product_id, crawled_at DESC);
+CREATE INDEX IF NOT EXISTS idx_variants_product
+  ON variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_products_handle
+  ON products(handle);
 """
 
 def db():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    dbtune.apply_connection_pragmas(conn)
     return conn
 
 def init_db():
     conn = db()
     try:
         conn.executescript(SCHEMA)
-        run_migrations(conn)
+        applied = run_migrations(conn)
+        if applied:
+            # New indexes are useless to the planner until it has statistics.
+            dbtune.analyze(conn)
     finally:
+        dbtune.optimize(conn)
         conn.close()
 
 def latest_snapshot_for_variant(conn, variant_id):
@@ -1492,6 +1543,11 @@ def _process_run(crawled_at, run_start, links):
         pruned = conn.execute("SELECT changes()").fetchone()[0]
         if pruned:
             log(f"Pruned {pruned} old snapshot rows.")
+
+        # --- Prune old crawl markers: keep only the latest N runs ---
+        marker_rows = prune_crawl_markers(conn)
+        if marker_rows:
+            log(f"Pruned {marker_rows} old crawl_markers rows.")
 
         conn.commit()
         cur.close()
