@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -13,23 +14,32 @@ from admin.routes import auth_routes, dashboard, scripts, config_editor, data_vi
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = FastAPI(title="RivianCrawlr Admin", docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown hook. Replaces @app.on_event("startup"), which Starlette
+    removed in 1.0."""
+    init_admin_db()
+    yield
+
+
+app = FastAPI(title="RivianCrawlr Admin", docs_url=None, redoc_url=None, lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
-@app.on_event("startup")
-def startup():
-    init_admin_db()
-
-
 class AuthMiddleware(BaseHTTPMiddleware):
     """Handles authentication and session refresh only. No form body reading."""
 
     async def dispatch(self, request: Request, call_next):
-        path = request.url.path
+        # Read the path straight from the ASGI scope — this is the same value
+        # the router matches on. `request.url.path` is reconstructed from the
+        # Host header and re-parsed, which is what let CVE-2026-48710 and
+        # CVE-2026-54282 make it disagree with the routed path; middleware that
+        # grants access on a path prefix must never depend on that.
+        path = request.scope.get("path", "")
 
         # Skip auth for login page and static files
         if path.startswith("/static/") or path in ("/login", "/favicon.ico"):

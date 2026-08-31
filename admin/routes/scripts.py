@@ -81,7 +81,7 @@ def _render_detail(
     lock_status = check_lock_status(script["db_path"]) if script["db_path"] else None
     lock_holders = find_lock_holders(script["db_path"]) if script["db_path"] else None
 
-    return templates.TemplateResponse("script_detail.html", {
+    return templates.TemplateResponse(request, "script_detail.html", {
         "request": request,
         "script": script,
         "status": status,
@@ -226,7 +226,7 @@ def script_logs(request: Request, script_id: int,
 
     logs = get_journal_logs(script["service_unit"], lines=lines, since=since)
 
-    return templates.TemplateResponse("script_logs.html", {
+    return templates.TemplateResponse(request, "script_logs.html", {
         "request": request,
         "script": script,
         "logs": logs,

@@ -27,7 +27,7 @@ def settings_page(request: Request):
     finally:
         conn.close()
 
-    return templates.TemplateResponse("settings.html", {
+    return templates.TemplateResponse(request, "settings.html", {
         "request": request,
         "scripts": scripts,
         "csrf_token": request.state.csrf_token,
@@ -72,7 +72,7 @@ def _settings_response(request: Request, flash: str = None, flash_type: str = "i
     finally:
         conn.close()
 
-    return templates.TemplateResponse("settings.html", {
+    return templates.TemplateResponse(request, "settings.html", {
         "request": request,
         "scripts": scripts,
         "csrf_token": request.state.csrf_token,
@@ -117,7 +117,7 @@ def _parse_global_env() -> list[dict]:
 @router.get("/settings/global-config", response_class=HTMLResponse)
 def global_config_page(request: Request):
     entries = _parse_global_env()
-    return templates.TemplateResponse("global_config.html", {
+    return templates.TemplateResponse(request, "global_config.html", {
         "request": request,
         "entries": entries,
         "env_path": ENV_PATH,
@@ -142,7 +142,7 @@ async def global_config_save(request: Request):
     invalid = [k for k in keys if k not in GLOBAL_ENV_KEYS]
     if invalid:
         entries = _parse_global_env()
-        return templates.TemplateResponse("global_config.html", {
+        return templates.TemplateResponse(request, "global_config.html", {
             "request": request,
             "entries": entries,
             "env_path": ENV_PATH,
@@ -201,7 +201,7 @@ async def global_config_save(request: Request):
         raise
 
     entries = _parse_global_env()
-    return templates.TemplateResponse("global_config.html", {
+    return templates.TemplateResponse(request, "global_config.html", {
         "request": request,
         "entries": entries,
         "env_path": ENV_PATH,

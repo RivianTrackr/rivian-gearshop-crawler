@@ -149,7 +149,7 @@ def config_page(request: Request, script_id: int):
         script_keys = GEARSHOP_ENV_KEYS
     filtered = [e for e in entries if e.get("type") != "env" or e.get("key") in script_keys]
 
-    return templates.TemplateResponse("config_editor.html", {
+    return templates.TemplateResponse(request, "config_editor.html", {
         "request": request,
         "script": script,
         "entries": filtered,
@@ -181,7 +181,7 @@ async def config_save(request: Request, script_id: int):
     unknown_keys = [k for k in keys if k not in KNOWN_ENV_KEYS]
     if unknown_keys:
         entries = _parse_env_file(env_path)
-        return templates.TemplateResponse("config_editor.html", {
+        return templates.TemplateResponse(request, "config_editor.html", {
             "request": request,
             "script": script,
             "entries": entries,
@@ -198,7 +198,7 @@ async def config_save(request: Request, script_id: int):
 
     entries = _parse_env_file(env_path)
 
-    return templates.TemplateResponse("config_editor.html", {
+    return templates.TemplateResponse(request, "config_editor.html", {
         "request": request,
         "script": script,
         "entries": entries,

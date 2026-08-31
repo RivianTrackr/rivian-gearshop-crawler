@@ -115,7 +115,7 @@ def content_filters_page(request: Request, script_id: int):
         except Exception as e:
             logger.warning("Could not load content filters: %s", e)
 
-    return templates.TemplateResponse("content_filters.html", {
+    return templates.TemplateResponse(request, "content_filters.html", {
         "request": request,
         "script": script,
         "filters": filters,
@@ -352,7 +352,7 @@ def _filters_response(request: Request, script, flash: str = None, flash_type: s
         except Exception:
             pass
 
-    return templates.TemplateResponse("content_filters.html", {
+    return templates.TemplateResponse(request, "content_filters.html", {
         "request": request,
         "script": script,
         "filters": filters,

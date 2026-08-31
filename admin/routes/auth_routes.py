@@ -76,7 +76,7 @@ def login_page(request: Request):
     token = request.cookies.get(COOKIE_NAME)
     if token and validate_session_token(token):
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request, "login.html", {"request": request, "error": None})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -86,7 +86,7 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
     if _is_rate_limited(client_ip):
         logger.warning("Rate limited login attempt from %s", client_ip)
         return templates.TemplateResponse(
-            "login.html", {"request": request, "error": "Too many login attempts. Please try again later."}
+            request, "login.html", {"request": request, "error": "Too many login attempts. Please try again later."}
         )
 
     conn = get_admin_db()
@@ -107,7 +107,7 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
         _record_failed_attempt(client_ip)
         logger.warning("Failed login attempt for user '%s' from %s", username, client_ip)
         return templates.TemplateResponse(
-            "login.html", {"request": request, "error": "Invalid username or password."}
+            request, "login.html", {"request": request, "error": "Invalid username or password."}
         )
 
     token = create_session_token(row["id"])

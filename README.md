@@ -231,6 +231,27 @@ root too, the shape is: run it as `riviancrawlr`, and grant exactly the
 `systemctl start/stop/restart/enable` verbs it needs via
 `/etc/sudoers.d/riviancrawlr`.
 
+### Dependencies
+
+The admin UI's pins carry a security floor, noted inline in
+`requirements.txt`: `fastapi>=0.141` is what pulls `starlette>=1.3.1`, and
+`python-multipart>=0.0.31`. Earlier pins resolved to `starlette` 0.38.x, which
+is affected by CVE-2026-48710 and CVE-2026-54282 — `request.url` disagreeing
+with the path the router actually matched. That one is not theoretical here:
+`AuthMiddleware` grants access on a path prefix, so it now reads the path
+straight from the ASGI scope instead.
+
+Re-check before upgrading:
+
+```bash
+pip install pip-audit
+pip-audit -r requirements.txt
+```
+
+Note that Starlette 1.0 removed the `TemplateResponse(name, context)`
+signature and the `@app.on_event` hook. Both fail only when a route renders,
+not at import, so `tests/test_admin_app.py` exercises every template page.
+
 ### Session invalidation caveat
 
 Admin sessions are stateless signed tokens (`itsdangerous`), so **logging out

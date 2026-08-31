@@ -89,7 +89,7 @@ def notifications_page(request: Request, script_id: int):
     discord_notif = _get_notification(script_id, "discord")
     social_notif = _get_notification(script_id, "social")
 
-    return templates.TemplateResponse("script_notifications.html", {
+    return templates.TemplateResponse(request, "script_notifications.html", {
         "request": request,
         "script": script,
         "is_support": "support" in script["name"],
@@ -384,7 +384,7 @@ def _notif_response(request: Request, script_id: int, flash: str = None, flash_t
     discord_notif = _get_notification(script_id, "discord")
     social_notif = _get_notification(script_id, "social")
 
-    return templates.TemplateResponse("script_notifications.html", {
+    return templates.TemplateResponse(request, "script_notifications.html", {
         "request": request,
         "script": script,
         "is_support": "support" in (script["name"] if script else ""),

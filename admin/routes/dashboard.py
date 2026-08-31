@@ -129,7 +129,7 @@ def _build_dashboard_data() -> dict:
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     data = _build_dashboard_data()
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse(request, "dashboard.html", {
         "request": request,
         "scripts": data["scripts"],
         "system": data["system"],
