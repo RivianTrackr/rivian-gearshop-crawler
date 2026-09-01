@@ -1270,6 +1270,18 @@ def _dispatch_social(platform, change_type, product_id, text, link):
                             args=(platform, change_type, product_id, text, link))
 
 
+def _summary_dedupe_key(summary_text):
+    """Stable synthetic product_id for an overflow summary post.
+
+    social_posts is keyed on an INTEGER product_id, so the summary needs an id
+    that is derived from its text and cannot collide with a real Shopify
+    product id. Negative values are used because Shopify ids are positive.
+    """
+    import hashlib
+    digest = hashlib.sha256(summary_text.encode("utf-8")).hexdigest()[:12]
+    return -int(digest, 16)
+
+
 def send_social(new_products=None, removed_products=None):
     """Auto-post added/removed products to enabled social platforms.
 
@@ -1321,17 +1333,20 @@ def send_social(new_products=None, removed_products=None):
             f"see the full catalog: {COLLECTION_URL}"
         )
         summary = social.clamp_message(summary, link=COLLECTION_URL)
+
+        # Individual posts are de-duplicated per (product, change, platform)
+        # through social_posts, but the overflow summary had no such guard: a
+        # run that kept producing the same overflow re-posted the same summary
+        # publicly every hour. Key it on the summary text so an unchanged
+        # summary posts once, and route it through _dispatch_social so it gets
+        # the same dedupe recording and retry handling as an individual post.
+        summary_key = _summary_dedupe_key(summary)
         for platform in platforms:
-            label = f"social:{platform}:summary"
+            if _already_posted_social(summary_key, "summary", platform):
+                skipped += 1
+                continue
             attempted += 1
-            try:
-                social.POSTERS[platform](SOCIAL_CONFIG[platform], summary, COLLECTION_URL)
-            except Exception as e:
-                logger.error("%s post failed: %s", label, e)
-                retry_queue.enqueue(
-                    label,
-                    lambda p=platform, t=summary: social.POSTERS[p](SOCIAL_CONFIG[p], t, COLLECTION_URL),
-                )
+            _dispatch_social(platform, "summary", summary_key, summary, COLLECTION_URL)
 
     logger.info(
         "Social: %d post(s) attempted, %d skipped (already posted)",
@@ -1596,16 +1611,30 @@ def _process_run(crawled_at, run_start, links):
 
         conn.commit()
 
-        # New products: first time seen at/after this crawl time
+        # New products: seen in THIS run, and not in any earlier retained run.
+        #
+        # The "seen in this run" half is load-bearing. Without it the query
+        # reports every `products` row that has no older marker — and rows are
+        # never deleted from `products`, so a product removed from the store
+        # months ago still has one. That was harmless only while markers went
+        # back to the beginning of time. Once crawl_markers gained a retention
+        # window, the prune deleted the old markers of long-dead products and
+        # they all resurfaced as "new", every hour, forever, because a product
+        # that is no longer crawled never gains a new marker to stop it.
         cur2 = conn.execute("""
           SELECT p.product_id, p.title, p.handle, p.vendor, p.url
           FROM products p
-          WHERE NOT EXISTS (
+          WHERE EXISTS (
+            SELECT 1 FROM crawl_markers cm_now
+            WHERE cm_now.product_id = p.product_id
+              AND cm_now.crawled_at = ?
+          )
+          AND NOT EXISTS (
             SELECT 1 FROM crawl_markers cm_prev
             WHERE cm_prev.product_id = p.product_id
               AND cm_prev.crawled_at < ?
           )
-        """, (crawled_at,))
+        """, (crawled_at, crawled_at))
         for row in cur2:
             new_products_report_block.append(dict(row))
 
