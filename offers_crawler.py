@@ -1151,12 +1151,12 @@ def main():
         """)
         pruned = conn.execute("SELECT changes()").fetchone()[0]
         if pruned:
-            log(f"Pruned {pruned} old snapshot rows.")
+            logger.info("Pruned %d old snapshot rows.", pruned)
 
         # --- Prune old crawl markers: keep only the latest N runs ---
         marker_rows = prune_crawl_markers(conn)
         if marker_rows:
-            log(f"Pruned {marker_rows} old offers_crawl_markers rows.")
+            logger.info("Pruned %d old offers_crawl_markers rows.", marker_rows)
 
         conn.commit()
         cur.close()

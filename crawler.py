@@ -623,9 +623,97 @@ def handle_from_product_url(url):
         return None
     return path.split("/products/", 1)[1].strip("/")
 
-def _requests_session_with_retries(retries=3, backoff_factor=0.5, status_forcelist=(500, 502, 503, 504)):
+# Statuses worth retrying. 429 is the one that matters in practice: Shopify
+# rate-limits /products/<handle>.json during a run and the product is then
+# skipped entirely for that crawl, so a price or availability change that hour
+# is silently never recorded. 5xx and Cloudflare's 52x are transient too.
+# 404 is deliberately absent — confirm_product_removed() and
+# check_variant_api_available() both treat it as a real answer, not a failure.
+RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504, 520, 521, 522, 523, 524})
+
+FETCH_MAX_ATTEMPTS = max(1, int(os.getenv("FETCH_MAX_ATTEMPTS", "4")))
+FETCH_BACKOFF_BASE = float(os.getenv("FETCH_BACKOFF_BASE", "1.0"))
+# Cap on how long a single server-supplied Retry-After will be honoured.
+FETCH_RETRY_AFTER_CAP = float(os.getenv("FETCH_RETRY_AFTER_CAP", "30"))
+# Total seconds a run may spend sleeping between retries. Without this a
+# sustained rate-limit could push the run past the unit's TimeoutStartSec
+# (1800s) and get it killed mid-crawl, which is worse than a few skips.
+FETCH_RETRY_BUDGET_SECONDS = float(os.getenv("FETCH_RETRY_BUDGET_SECONDS", "300"))
+
+_retry_budget_spent = 0.0
+_retry_stats = {"retries": 0, "gave_up": 0, "budget_exhausted": 0}
+
+
+def _reset_retry_state():
+    global _retry_budget_spent, _retry_stats
+    _retry_budget_spent = 0.0
+    _retry_stats = {"retries": 0, "gave_up": 0, "budget_exhausted": 0}
+
+
+def _parse_retry_after(value):
+    """Parse a Retry-After header (delta-seconds or HTTP-date) into seconds.
+
+    Returns None when absent or unparseable.
+    """
+    if not value:
+        return None
+    value = value.strip()
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+        when = parsedate_to_datetime(value)
+        if when is None:
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _retry_delay(attempt, retry_after=None):
+    """Seconds to wait before `attempt` (1-based count of attempts already made).
+
+    Prefers the server's Retry-After, capped. Otherwise exponential backoff
+    with jitter, so a run that hits the limit on many products does not march
+    every retry in lockstep.
+    """
+    if retry_after is not None:
+        return min(retry_after, FETCH_RETRY_AFTER_CAP)
+    import random
+    return FETCH_BACKOFF_BASE * (2 ** (attempt - 1)) * (0.5 + random.random())
+
+
+def _spend_retry_budget(delay):
+    """Sleep `delay` if the run's retry budget allows. Returns True if it slept."""
+    global _retry_budget_spent
+    if _retry_budget_spent + delay > FETCH_RETRY_BUDGET_SECONDS:
+        _retry_stats["budget_exhausted"] += 1
+        return False
+    time.sleep(delay)
+    _retry_budget_spent += delay
+    _retry_stats["retries"] += 1
+    return True
+
+
+def _requests_session_with_retries(
+    retries=3,
+    backoff_factor=0.5,
+    status_forcelist=(429, 500, 502, 503, 504, 520, 521, 522, 523, 524),
+):
     session = requests.Session()
-    retry = Retry(total=retries, backoff_factor=backoff_factor, status_forcelist=status_forcelist)
+    retry = Retry(
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        # urllib3 honours Retry-After by default; stated explicitly because
+        # 429 handling is the whole point of this session.
+        respect_retry_after_header=True,
+        allowed_methods=frozenset({"GET", "HEAD"}),
+    )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
@@ -653,7 +741,8 @@ def _reset_avail_tier_counts():
     _avail_tier_counts = {"js": 0, "json": 0, "api": 0, "html": 0, "none": 0}
 
 
-def fetch_via_browser(page, url, timeout=30000):
+def fetch_via_browser(page, url, timeout=30000, max_attempts=None,
+                      retry_statuses=RETRYABLE_STATUSES):
     """Run `fetch(url)` inside the open browser tab and return (status, body_text).
 
     Uses `page.goto()` (a real navigation) rather than `page.evaluate(fetch(...))`
@@ -667,11 +756,58 @@ def fetch_via_browser(page, url, timeout=30000):
     pull the body straight off the Response. Cookies accumulated during
     the initial collection-page visit (incl. Cloudflare's cf_clearance)
     ride along on every subsequent goto.
+
+    Retries on 429 and 5xx (and on a failed navigation) with exponential
+    backoff, honouring a server-supplied Retry-After. Every Shopify fetch in
+    this module routes through here once the browser is up, so without the
+    retry a single 429 means the product is skipped for the whole run and that
+    hour's price/availability change is never recorded. Returns the last
+    response rather than raising when attempts or the run's retry budget are
+    exhausted, so callers keep their existing (status, body) contract.
     """
-    response = page.goto(url, wait_until="commit", timeout=timeout)
-    if response is None:
-        raise requests.HTTPError(f"No response navigating to {url}")
-    return response.status, response.text()
+    attempts = max_attempts if max_attempts is not None else FETCH_MAX_ATTEMPTS
+    last_exc = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            response = page.goto(url, wait_until="commit", timeout=timeout)
+            if response is None:
+                raise requests.HTTPError(f"No response navigating to {url}")
+
+            if response.status not in retry_statuses or attempt == attempts:
+                if response.status in retry_statuses:
+                    _retry_stats["gave_up"] += 1
+                    logger.warning(
+                        "Giving up on %s after %d attempt(s): HTTP %d",
+                        url, attempt, response.status,
+                    )
+                return response.status, response.text()
+
+            retry_after = None
+            try:
+                retry_after = _parse_retry_after((response.headers or {}).get("retry-after"))
+            except Exception:
+                retry_after = None
+            delay = _retry_delay(attempt, retry_after)
+            if not _spend_retry_budget(delay):
+                logger.warning(
+                    "Retry budget exhausted (%.0fs); not retrying %s after HTTP %d",
+                    FETCH_RETRY_BUDGET_SECONDS, url, response.status,
+                )
+                return response.status, response.text()
+            log(f"    HTTP {response.status} from {url}; retry {attempt}/{attempts - 1} in {delay:.1f}s")
+
+        except Exception as exc:  # navigation timeout, transport error
+            last_exc = exc
+            if attempt == attempts:
+                raise
+            delay = _retry_delay(attempt)
+            if not _spend_retry_budget(delay):
+                raise
+            log(f"    navigation error on {url} ({exc}); retry {attempt}/{attempts - 1} in {delay:.1f}s")
+
+    # Unreachable: the loop either returns or raises on its final attempt.
+    raise last_exc if last_exc else requests.HTTPError(f"Failed to fetch {url}")
 
 
 def fetch_product_json(handle):
@@ -1542,12 +1678,12 @@ def _process_run(crawled_at, run_start, links):
         """)
         pruned = conn.execute("SELECT changes()").fetchone()[0]
         if pruned:
-            log(f"Pruned {pruned} old snapshot rows.")
+            logger.info("Pruned %d old snapshot rows.", pruned)
 
         # --- Prune old crawl markers: keep only the latest N runs ---
         marker_rows = prune_crawl_markers(conn)
         if marker_rows:
-            log(f"Pruned {marker_rows} old crawl_markers rows.")
+            logger.info("Pruned %d old crawl_markers rows.", marker_rows)
 
         conn.commit()
         cur.close()
@@ -1564,13 +1700,18 @@ def _process_run(crawled_at, run_start, links):
         _record_crawl_run(crawled_at, run_start, status="error", error_message=str(exc))
         raise
 
-    # Summary log
+    # Summary log. INFO, not debug: with CRAWLER_DEBUG=0 (the default) a run
+    # otherwise emits nothing between startup and "Wrote JSON", so there is no
+    # way to see what a run actually did without turning on full debug logging.
     tier_summary = " ".join(f"{k}={v}" for k, v in _avail_tier_counts.items() if v)
-    log(
-        f"Diffs: {len(diffs)} | New: {len(new_products_report_block)} | "
-        f"Removed: {len(removed_products_report_block)} | "
-        f"HTML availability checks: {get_avail_html_checks()} | "
-        f"avail tiers: {tier_summary or 'none'}"
+    logger.info(
+        "Diffs: %d | New: %d | Removed: %d | HTML availability checks: %d | "
+        "avail tiers: %s | fetch retries: %d (gave up on %d, budget stops %d, %.0fs of %.0fs spent)",
+        len(diffs), len(new_products_report_block), len(removed_products_report_block),
+        get_avail_html_checks(), tier_summary or "none",
+        _retry_stats["retries"], _retry_stats["gave_up"],
+        _retry_stats["budget_exhausted"], _retry_budget_spent,
+        FETCH_RETRY_BUDGET_SECONDS,
     )
 
     # Email / Heartbeat
@@ -1678,6 +1819,7 @@ def main():
     init_db()
     reset_avail_state()
     _reset_avail_tier_counts()
+    _reset_retry_state()
     crawled_at = now_utc_iso()
     run_start = time.time()
 
