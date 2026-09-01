@@ -87,6 +87,13 @@ if ! grep -q "^ADMIN_SECRET_KEY=" "${INSTALL_DIR}/.env" 2>/dev/null; then
 fi
 
 echo "==> Configuring nginx reverse proxy..."
+# Body shared by the HTTP and HTTPS server blocks. Both include it, so the two
+# cannot drift apart.
+cp "${REPO_DIR}/nginx-riviancrawlr-common.conf" /etc/nginx/riviancrawlr-common.conf
+# Directory the HTTPS server block is dropped into once a Cloudflare Origin
+# Certificate exists. The main config wildcard-includes it; an empty match is
+# not an error, so nginx stays valid until TLS is actually set up.
+mkdir -p /etc/nginx/riviancrawlr-tls
 cp "${REPO_DIR}/nginx-riviancrawlr.conf" /etc/nginx/sites-available/riviancrawlr.com
 ln -sf /etc/nginx/sites-available/riviancrawlr.com /etc/nginx/sites-enabled/
 # Remove default site if it exists

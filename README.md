@@ -168,39 +168,75 @@ Two items below need a change on the server itself and are **not** applied by
 
 ### 1. Move Cloudflare off Flexible SSL
 
-`nginx-riviancrawlr.conf` listens on plain HTTP because Cloudflare is set to
-**Flexible** SSL: browser→Cloudflare is encrypted, but Cloudflare→origin is
-not. Every admin session cookie and every password POST crosses the public
-internet in cleartext on that second hop, so anyone on the path between
-Cloudflare and the VPS can read them.
+Cloudflare is set to **Flexible** SSL: browser→Cloudflare is encrypted, but
+Cloudflare→origin is not. Every admin session cookie and every password POST
+crosses the public internet in cleartext on that second hop.
 
-To fix:
+The nginx config is split so this switchover is safe and reversible:
+
+| File | Installed to | Purpose |
+|---|---|---|
+| `nginx-riviancrawlr.conf` | `/etc/nginx/sites-available/riviancrawlr.com` | Port 80 server block |
+| `nginx-riviancrawlr-common.conf` | `/etc/nginx/riviancrawlr-common.conf` | Body shared by both server blocks |
+| `nginx-riviancrawlr-tls.conf` | `/etc/nginx/riviancrawlr-tls/` — **manually, after certs exist** | Port 443 server block |
+
+The main config wildcard-includes `/etc/nginx/riviancrawlr-tls/*.conf`. A
+wildcard that matches nothing is not an error, so the config is valid whether
+or not TLS is set up. `nginx -t` **fails** if `ssl_certificate` points at a
+missing file, and a failing config takes the site down on the next reload —
+which is why the TLS block is not installed by default.
+
+**Order matters: build the HTTPS path first, flip Cloudflare last.** Switching
+Cloudflare to Full (strict) before the origin can serve TLS returns 526 to
+every visitor.
 
 1. Cloudflare dashboard → SSL/TLS → **Origin Server** → *Create Certificate*.
-   Save the cert and key to `/etc/ssl/riviancrawlr/`.
-2. Add a TLS server block to the nginx config:
+   Save the certificate and private key on the box:
 
-   ```nginx
-   server {
-       listen 443 ssl;
-       listen [::]:443 ssl;
-       server_name riviancrawlr.com www.riviancrawlr.com;
-
-       ssl_certificate     /etc/ssl/riviancrawlr/origin.pem;
-       ssl_certificate_key /etc/ssl/riviancrawlr/origin.key;
-       ssl_protocols       TLSv1.2 TLSv1.3;
-
-       # ... the same add_header / location blocks as the port-80 server ...
-   }
+   ```bash
+   sudo mkdir -p /etc/ssl/riviancrawlr
+   sudo nano /etc/ssl/riviancrawlr/origin.pem   # paste the certificate
+   sudo nano /etc/ssl/riviancrawlr/origin.key   # paste the private key
+   sudo chmod 600 /etc/ssl/riviancrawlr/origin.key
+   sudo chmod 644 /etc/ssl/riviancrawlr/origin.pem
    ```
-3. Redirect port 80 to 443, then switch Cloudflare SSL mode to
-   **Full (strict)**.
-4. Once HTTPS is confirmed end to end, add HSTS:
-   `add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;`
 
-Also worth doing: uncomment the `allow`/`deny all` Cloudflare-only block in
-the nginx config so the origin IP cannot be hit directly, bypassing
-Cloudflare's WAF and rate limiting entirely.
+2. Install the HTTPS server block and reload:
+
+   ```bash
+   cd /opt/rivian-gearshop-crawler
+   sudo cp nginx-riviancrawlr-common.conf /etc/nginx/riviancrawlr-common.conf
+   sudo cp nginx-riviancrawlr.conf /etc/nginx/sites-available/riviancrawlr.com
+   sudo mkdir -p /etc/nginx/riviancrawlr-tls
+   sudo cp nginx-riviancrawlr-tls.conf /etc/nginx/riviancrawlr-tls/
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+   Do not reload if `nginx -t` fails.
+
+3. Verify the origin serves TLS **before** touching Cloudflare. Port 80 keeps
+   working throughout, so the site stays up while you check:
+
+   ```bash
+   curl -skI --resolve riviancrawlr.com:443:127.0.0.1 https://riviancrawlr.com/ | head -1
+   echo | openssl s_client -connect 127.0.0.1:443 -servername riviancrawlr.com 2>/dev/null | grep -E "Protocol|Cipher"
+   ```
+
+   Expect `HTTP/1.1 200 OK` and a TLSv1.2/1.3 cipher. `-k` is required: an
+   Origin CA certificate is only trusted by Cloudflare, not publicly, so a
+   direct connection legitimately fails verification.
+
+4. Only now switch Cloudflare SSL/TLS mode to **Full (strict)**, then load the
+   site. Rollback is switching it back to Flexible — the origin keeps serving
+   port 80 either way.
+
+5. Once HTTPS is confirmed end to end, uncomment the HSTS line in
+   `/etc/nginx/riviancrawlr-tls/nginx-riviancrawlr-tls.conf` and reload.
+   Leave it commented until then: browsers cache HSTS for its `max-age` and
+   will refuse plain HTTP for that long, which is painful to undo.
+
+Also worth doing: uncomment the `deny all;` in the port-80 block so the origin
+IP cannot be hit directly, bypassing Cloudflare's WAF and rate limiting.
 
 ### 2. Run the crawlers as a non-root user
 
@@ -285,7 +321,9 @@ which is the lever to pull if you suspect a token leaked.
 ├── rivian-offers-crawler.service     # systemd service: offers
 ├── rivian-offers-crawler.timer       # systemd timer: offers
 ├── gearshop-admin.service            # systemd service: admin panel
-├── nginx-riviancrawlr.conf           # nginx reverse proxy config
+├── nginx-riviancrawlr.conf           # nginx reverse proxy (port 80)
+├── nginx-riviancrawlr-common.conf    # server-block body shared by HTTP + HTTPS
+├── nginx-riviancrawlr-tls.conf       # nginx HTTPS block (installed manually, after certs)
 ├── admin/                            # Admin panel (FastAPI + Pico CSS)
 │   ├── app.py                        # FastAPI app, auth middleware
 │   ├── auth.py                       # Session & password management
