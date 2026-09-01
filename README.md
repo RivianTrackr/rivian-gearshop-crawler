@@ -38,6 +38,7 @@ Monitors [gearshop.rivian.com](https://gearshop.rivian.com) and [rivian.com/supp
 - **Dedup memory** — Tracks already-reported removals to prevent repeated alerts
 - **Content filters** — Strips noisy sections (like "Related articles") before hashing, so they don't trigger change notifications
 - **Rate limiting** — Caps HTML fallback checks at 200/run, throttles JSON and article fetches
+- **Retry on 429/5xx** — Shopify rate-limits `/products/<handle>.json` mid-run; every fetch retries with exponential backoff honouring `Retry-After`, under a per-run time budget. Without it a single 429 skipped that product for the whole run, so its price/availability change that hour was never recorded. 404 is never retried — removal detection treats it as a real answer
 - **SQLite busy timeout** — 30-second retry window prevents "database is locked" errors from concurrent access
 - **Indexed hot paths** — the per-variant snapshot lookup that runs once per variant per crawl is index-backed; unindexed it made a run cost O(variants x snapshots)
 - **Bounded marker history** — `crawl_markers` is pruned to the newest `MARKER_RETENTION_RUNS` runs instead of growing forever
@@ -93,6 +94,10 @@ Optional settings:
 | `DISCORD_WEBHOOK_URL` | _(empty)_ | Discord webhook for notifications |
 | `ADMIN_SECRET_KEY` | _(auto-generated)_ | Session signing key for admin panel |
 | `ADMIN_COOKIE_SECURE` | `1` | Mark the session cookie `Secure`. Set to `0` only when reaching the panel over plain HTTP (e.g. an SSH tunnel to `127.0.0.1:8111`), otherwise the browser withholds the cookie and every request bounces to `/login` |
+| `FETCH_MAX_ATTEMPTS` | `4` | Attempts per Shopify fetch before giving up (429/5xx only) |
+| `FETCH_BACKOFF_BASE` | `1.0` | Base seconds for exponential backoff between retries |
+| `FETCH_RETRY_AFTER_CAP` | `30` | Longest server-supplied `Retry-After` that will be honoured |
+| `FETCH_RETRY_BUDGET_SECONDS` | `300` | Total seconds a run may spend sleeping on retries, so a sustained rate-limit cannot push the run past the unit's `TimeoutStartSec` |
 | `MARKER_RETENTION_RUNS` | `720` | Crawl-marker runs to keep (~30 days hourly). Floor of 3, which removal detection needs |
 | `SQLITE_BUSY_TIMEOUT_MS` | `30000` | Busy timeout applied to every SQLite connection |
 | `SQLITE_CACHE_SIZE_KIB` | `16384` | Page cache per connection |
